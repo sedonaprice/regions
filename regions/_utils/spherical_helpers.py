@@ -296,8 +296,12 @@ def _add_tan_pts_if_in_pa_range(
     wrap_ang,
     pas_verts_wrap,
     coord=None,
+    gc_center=None
 ):
-    pas_tan_pts = gc.center.position_angle(tan_pts).to(u.deg)
+    if gc is None:
+        pas_tan_pts = gc_center.position_angle(tan_pts).to(u.deg)
+    else:
+        pas_tan_pts = gc.center.position_angle(tan_pts).to(u.deg)
 
     # CHECK RANGES:
     # To handle possible cases of lon values "wrapping around" across
@@ -540,7 +544,7 @@ def _discretize_edge_boundary(vertices, circ, n_points,
 
     # For every edge boundary: determine range of PAs spanned by lines
     # connecting circle center to the two vertices bounding that edge:
-    pas_verts = circ.center.position_angle(vertices).to(u.deg)
+    pas_verts = circ_center.position_angle(vertices).to(u.deg)
 
     pas_verts_wrap, wrap_ang = _validate_vertices_ordering(
         vertices, circ, gc_center=circ_center,
@@ -556,7 +560,7 @@ def _discretize_edge_boundary(vertices, circ, n_points,
 
     # Calculate directional offsets to get boundary discretization,
     # with vertices as SkyCoords
-    bound_verts = circ.center.directional_offset_by(theta, circ_radius)
+    bound_verts = circ_center.directional_offset_by(theta, circ_radius)
 
     return bound_verts
 

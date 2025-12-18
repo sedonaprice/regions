@@ -3,7 +3,7 @@
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Latitude, Longitude, SkyCoord
 from astropy.io import fits
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils.data import get_pkg_data_filename
@@ -13,9 +13,12 @@ from numpy.testing import assert_allclose
 from regions._utils.optional_deps import HAS_MATPLOTLIB
 from regions.core import (CompoundPixelRegion, CompoundSkyRegion, PixCoord,
                           RegionMeta, RegionVisual)
-from regions.shapes.line import LinePixelRegion, LineSkyRegion
+from regions.shapes.circle import CircleSphericalSkyRegion
+from regions.shapes.line import (LinePixelRegion, LineSkyRegion,
+                                 LineSphericalSkyRegion)
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
-                                              BaseTestSkyRegion)
+                                              BaseTestSkyRegion,
+                                              BaseTestSphericalSkyRegion)
 from regions.tests.helpers import make_simple_wcs
 
 
@@ -147,3 +150,111 @@ class TestLineSkyRegion(BaseTestSkyRegion):
         assert isinstance(lineskydiscr.region2, LineSkyRegion)
         assert isinstance(lineskydiscr.region1.region1, LineSkyRegion)
         assert isinstance(lineskydiscr.region1.region2, LineSkyRegion)
+
+
+class TestLineSphericalSkyRegion(BaseTestSphericalSkyRegion):
+    inside = []
+    outside = [(3 * u.deg, 4 * u.deg), (3 * u.deg, 0 * u.deg)]
+    meta = RegionMeta({'text': 'test'})
+    visual = RegionVisual({'color': 'blue'})
+    start = SkyCoord(3 * u.deg, 4 * u.deg, frame='galactic')
+    end = SkyCoord(3 * u.deg, 5 * u.deg, frame='galactic')
+    reg = LineSphericalSkyRegion(start, end, meta=meta, visual=visual)
+
+    expected_repr = ('<LineSphericalSkyRegion(start=<SkyCoord (Galactic): (l, b) '
+                     'in deg\n    (3., 4.)>, end=<SkyCoord (Galactic): '
+                     '(l, b) in deg\n    (3., 5.)>)>')
+    expected_str = ('Region: LineSphericalSkyRegion\nstart: <SkyCoord (Galactic): '
+                    '(l, b) in deg\n    (3., 4.)>\nend: <SkyCoord '
+                    '(Galactic): (l, b) in deg\n    (3., 5.)>')
+
+    def test_copy(self):
+        reg = self.reg.copy()
+        assert_allclose(reg.start.b.deg, 4)
+        assert_allclose(reg.end.b.deg, 5)
+        assert reg.meta == self.meta
+        assert reg.visual == self.visual
+
+    def test_transformation(self, wcs):
+        sphskyline = self.reg
+
+        pixline = sphskyline.to_pixel(wcs)
+
+        assert_allclose(pixline.start.x, -50.5)
+        assert_allclose(pixline.start.y, 299.5)
+
+        skyline = sphskyline.to_sky(wcs)
+        assert isinstance(skyline, LineSkyRegion)
+
+        sphskyline2 = pixline.to_spherical_sky(wcs)
+
+        assert_quantity_allclose(sphskyline.start.data.lon,
+                                 sphskyline2.start.data.lon)
+        assert_quantity_allclose(sphskyline.start.data.lat,
+                                 sphskyline2.start.data.lat)
+        assert_quantity_allclose(sphskyline.end.data.lon,
+                                 sphskyline2.end.data.lon)
+        assert_quantity_allclose(sphskyline.end.data.lat,
+                                 sphskyline2.end.data.lat)
+
+        lineskydist = sphskyline.to_sky(wcs, include_boundary_distortions=True)
+        assert isinstance(lineskydist, CompoundSkyRegion)
+        assert isinstance(lineskydist.region2, LineSkyRegion)
+
+        linepixdist = sphskyline.to_pixel(wcs, include_boundary_distortions=True)
+        assert isinstance(linepixdist, CompoundPixelRegion)
+        assert isinstance(linepixdist.region2, LinePixelRegion)
+
+    def test_transformation_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_pixel(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+    def test_frame_transformation(self):
+        reg = self.reg
+
+        reg2 = reg.transform_to('icrs')
+        assert reg2.start == self.reg.start.transform_to('icrs')
+        assert isinstance(reg2, LineSphericalSkyRegion)
+        assert reg2.frame.name == 'icrs'
+
+    def test_contains(self):
+        position = SkyCoord([1, 2] * u.deg, [3, 4] * u.deg)
+        # lines do not contain things
+        assert all(self.reg.contains(position)
+                   == np.array([False, False], dtype='bool'))
+
+    def test_eq(self):
+        reg = self.reg.copy()
+        assert reg == self.reg
+        reg.start = SkyCoord(1 * u.deg, 2 * u.deg, frame='galactic')
+        assert reg != self.reg
+        reg.start = SkyCoord(3 * u.deg, 4 * u.deg, frame='icrs')
+        assert reg != self.reg
+
+    def test_bounding_circle(self):
+        # start = SkyCoord(3 * u.deg, 4 * u.deg, frame='galactic')
+        # end = SkyCoord(3 * u.deg, 5 * u.deg, frame='galactic')
+        # reg = LineSphericalSkyRegion(start, end, meta=meta, visual=visual)
+
+        # Small rounding issue in BC:
+        skycoord = SkyCoord(3.0000000000000004 * u.deg, 4.5 * u.deg, frame='galactic')
+        reg = CircleSphericalSkyRegion(skycoord, 0.49999999999999983 * u.deg)
+
+        bounding_circle = self.reg.bounding_circle
+        assert bounding_circle == reg
+
+    def test_bounding_lonlat(self):
+        bounding_lonlat = self.reg.bounding_lonlat
+
+        assert_quantity_allclose(bounding_lonlat[0],
+                                 Longitude([3. * u.deg, 3. * u.deg]))
+
+        assert_quantity_allclose(bounding_lonlat[1],
+                                 Latitude([4 * u.deg, 5 * u.deg]))

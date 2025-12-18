@@ -672,10 +672,12 @@ class SphericalSkyRegion(Region):
             return self.center.frame
         elif 'vertices' in self._params:
             return self.vertices[0].frame
+        elif 'start' in self._params:
+            return self.start.frame
         else:
             raise AttributeError(
-                "Either 'center' or 'vertices' must be an attribute/property "
-                'of the SphericalSkyRegion.'
+                "Either 'center', 'vertices', or 'start' must be an "
+                'attribute/property of the SphericalSkyRegion.'
             )
 
     @property

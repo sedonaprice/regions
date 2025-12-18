@@ -225,7 +225,8 @@ and `~regions.PointSphericalSkyRegion`
 .. code-block:: python
 
     >>> from astropy.coordinates import SkyCoord
-    >>> from regions import PixCoord, PointSkyRegion, PointPixelRegion
+    >>> from regions import (PixCoord, PointSkyRegion, PointPixelRegion,
+    ...                      PointSphericalSkyRegion)
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = PointSkyRegion(center=center_sky)
@@ -236,16 +237,18 @@ and `~regions.PointSphericalSkyRegion`
 Line
 ****
 
-`~regions.LineSkyRegion` and `~regions.LinePixelRegion`
+`~regions.LineSkyRegion`, `~regions.LinePixelRegion`, and `~regions.LineSphericalSkyRegion`
 
 .. code-block:: python
 
     >>> from astropy.coordinates import SkyCoord
-    >>> from regions import PixCoord, LineSkyRegion, LinePixelRegion
+    >>> from regions import (PixCoord, LineSkyRegion, LinePixelRegion,
+    ...                      LineSphericalSkyRegion)
 
     >>> start_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> end_sky = SkyCoord(52, 53, unit='deg', frame='fk5')
     >>> region_sky = LineSkyRegion(start=start_sky, end=end_sky)
+    >>> region_sph_sky = LineSphericalSkyRegion(start=start_sky, end=end_sky)
     >>> region_pix = LinePixelRegion(start=PixCoord(x=42, y=43),
     ...                              end=PixCoord(x=52, y=53))
 
