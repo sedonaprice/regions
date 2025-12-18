@@ -225,7 +225,7 @@ class LuneSphericalSkyRegion(SphericalSkyRegion):
         if not include_boundary_distortions:
             raise ValueError(
                 'Invalid parameter: `include_boundary_distortions=False`!\n'
-                'Transforming range to planar pixel region is only possible by '
+                'Transforming lune to planar pixel region is only possible by '
                 'including boundary distortions, as there is no analogous pixel region.'
             )
 

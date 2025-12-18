@@ -241,7 +241,7 @@ You can access its properties via attributes:
    >>> region.radius
    <Quantity 3. deg>
 
-See the :ref:`shapes` documentation for the complete list of pixel-based
+See the :ref:`shapes` documentation for the complete list of sky coordinate-based
 regions and to learn more about :class:`~regions.Region` objects and
 their capabilities.
 
@@ -305,6 +305,6 @@ You can access its properties via attributes:
    >>> region.radius
    <Quantity 3. deg>
 
-See the :ref:`shapes` documentation for the complete list of pixel-based
-regions and to learn more about :class:`~regions.Region` objects and
-their capabilities.
+See the :ref:`shapes` documentation for the complete list of spherical
+sky coordinate-basedregions and to learn more about
+:class:`~regions.Region` objects and their capabilities.
