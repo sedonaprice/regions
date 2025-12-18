@@ -219,7 +219,8 @@ to a polygon and transforming the polygon.)
 Point
 *****
 
-`~regions.PointSkyRegion` and `~regions.PointPixelRegion`
+`~regions.PointSkyRegion`, `~regions.PointPixelRegion`,
+and `~regions.PointSphericalSkyRegion`
 
 .. code-block:: python
 
@@ -228,6 +229,7 @@ Point
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = PointSkyRegion(center=center_sky)
+    >>> region_sph_sky = PointSphericalSkyRegion(center=center_sky)
     >>> region_pix = PointPixelRegion(center=PixCoord(x=42, y=43))
 
 

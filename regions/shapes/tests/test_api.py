@@ -26,7 +26,8 @@ from regions.shapes.circle import (CirclePixelRegion, CircleSkyRegion,
                                    CircleSphericalSkyRegion)
 from regions.shapes.ellipse import EllipsePixelRegion, EllipseSkyRegion
 from regions.shapes.lune import LuneSphericalSkyRegion
-from regions.shapes.point import PointPixelRegion, PointSkyRegion
+from regions.shapes.point import (PointPixelRegion, PointSkyRegion,
+                                  PointSphericalSkyRegion)
 from regions.shapes.polygon import (PolygonPixelRegion, PolygonSkyRegion,
                                     PolygonSphericalSkyRegion)
 from regions.shapes.range import RangeSphericalSkyRegion
@@ -69,6 +70,7 @@ SPHERICAL_SKY_REGIONS = [
         longitude_range=[0, 10] * u.deg,
         latitude_range=[40, 60] * u.deg,
         frame='icrs'),
+    PointSphericalSkyRegion(SkyCoord(6 * u.deg, 5 * u.deg)),
     WholeSphericalSkyRegion()]
 
 INCLUDE_BOUNDARY_DISTORTIONS = [True, False]
@@ -115,7 +117,7 @@ def test_pix_to_sky(region):
 def test_pix_to_spherical_sky(region, include_dist):
     # TODO: remove expected failures when implemented
     # Expected failure:
-    #    No spherical Ellipse, EllipseAnnulus, Point, Rectangle, RectangleAnnulus
+    #    No spherical Ellipse, EllipseAnnulus, Rectangle, RectangleAnnulus
     # Also expected failure:
     #    Boundary distortions not yet implemented for
     #    CirclePixelRegion, CircleAnnulusPixelRegion, PolygonPixelRegion
@@ -123,7 +125,6 @@ def test_pix_to_spherical_sky(region, include_dist):
         isinstance(region,
                    (EllipsePixelRegion,
                     EllipseAnnulusPixelRegion,
-                    PointPixelRegion,
                     RectanglePixelRegion,
                     RectangleAnnulusPixelRegion))
         | ((isinstance(region,
@@ -177,7 +178,7 @@ def test_sky_to_pix(region):
 def test_sky_to_spherical_sky(region, include_dist):
     # TODO: remove expected failures when implemented
     # Expected failure:
-    #    No spherical Ellipse, EllipseAnnulus, Point, Rectangle, RectangleAnnulus
+    #    No spherical Ellipse, EllipseAnnulus, Rectangle, RectangleAnnulus
     # Also expected failure:
     #    Boundary distortions not yet implemented for
     #    CircleSkyRegion, CircleAnnulusSkyRegion, PolygonSkyRegion
@@ -185,7 +186,6 @@ def test_sky_to_spherical_sky(region, include_dist):
         isinstance(region,
                    (EllipseSkyRegion,
                     EllipseAnnulusSkyRegion,
-                    PointSkyRegion,
                     RectangleSkyRegion,
                     RectangleAnnulusSkyRegion))
         | ((isinstance(region,
