@@ -296,8 +296,12 @@ def _add_tan_pts_if_in_pa_range(
     wrap_ang,
     pas_verts_wrap,
     coord=None,
+    gc_center=None
 ):
-    pas_tan_pts = gc.center.position_angle(tan_pts).to(u.deg)
+    if gc is None:
+        pas_tan_pts = gc_center.position_angle(tan_pts).to(u.deg)
+    else:
+        pas_tan_pts = gc.center.position_angle(tan_pts).to(u.deg)
 
     # CHECK RANGES:
     # To handle possible cases of lon values "wrapping around" across
@@ -450,6 +454,83 @@ def get_edge_raw_lonlat_bounds_circ_edges(vertices, centroid, gcs):
     return Longitude(lons_arr).to(u.deg), Latitude(lats_arr).to(u.deg)
 
 
+def get_line_edge_raw_lonlat_bounds_circ_edges(coords, center):
+    """
+    Get the raw longitude / latitude bounds from the circle edges of
+    spherical sky region.
+
+    Parameters
+    ----------
+    coords : `~astropy.coordinates.SkyCoord`
+        The start, end of the line as a SkyCoord.
+
+    center : `~astropy.coordinates.SkyCoord`
+        The line center as a SkyCoord.
+
+    Returns
+    -------
+    longitude_limits, latitude_limits: `~astropy.coordinates.Longitude`
+        Length two |Longitude| and |Latitude| with the computed
+        longitude/latitude bounds from the polygon edges.
+    """
+    # Consider lon/lat of vertices: may produce min/max bounds:
+    vrepr = coords.represent_as('spherical')
+
+    # Special handling:
+    # Exclude vertices from longitude bounds if any is on a pole
+    lons_list = []
+    lats_list = []
+    for v in vrepr:
+        if np.abs(v.lat.to(u.deg).deg) < 90:
+            lons_list.append(v.lon)
+            lats_list.append(v.lat)
+    lons_list = Longitude(lons_list, unit=u.radian)
+    lats_list = Latitude(lats_list, unit=u.radian)
+
+    # Need to also check for "out bulging" from edges,
+    # as far as latitude/lon bounds:
+    # eg, 2 vertices at ~60deg: the gc arc goes ~closer to the pole;
+    # a circle centered close to the pole but not extending over it:
+    # WIDE lon bounds
+
+    gc_center = cross_product_skycoord2skycoord(coords[0], coords[1])
+    gc_radius = 90 * u.deg
+
+    pas_verts_wrap, wrap_ang = _validate_vertices_ordering(
+        coords, None, gc_center=gc_center
+    )
+
+    # --------------------------------------------------------
+    # Latitude tangent points from bound circle as len 2 SkyCoord:
+    # Only add to the list if the tangent point is located along this edge
+    tan_lat_pts = _get_circle_latitude_tangent_points(gc_center, gc_radius)
+
+    lats_list = _add_tan_pts_if_in_pa_range(
+        lats_list, tan_lat_pts, None, wrap_ang, pas_verts_wrap, coord='lat',
+        gc_center=gc_center
+    )
+
+    # --------------------------------------------------------
+    # Longitude tangent points from bound circle as len 2 SkyCoord:
+    # Only add to the list if the tangent point is located along this edge
+
+    tan_lon_pts = _get_circle_longitude_tangent_points(gc_center, gc_radius)
+    if tan_lon_pts is not None:
+        lons_list = _add_tan_pts_if_in_pa_range(
+            lons_list, tan_lon_pts, None, wrap_ang, pas_verts_wrap, coord='lon',
+            gc_center=gc_center
+        )
+
+    lons_arr = [lons_list.min(), lons_list.max()]
+    lats_arr = [lats_list.min(), lats_list.max()]
+
+    # --------------------------------------------------------
+    # Invert longitude order if centroid is outside of range:
+    lons_arr = _validate_lon_bounds_ordering(lons_arr, center)
+
+    return Longitude(lons_arr).to(u.deg), Latitude(lats_arr).to(u.deg)
+
+
 def _discretize_edge_boundary(vertices, circ, n_points,
                               circ_center=None, circ_radius=None):
 
@@ -463,7 +544,7 @@ def _discretize_edge_boundary(vertices, circ, n_points,
 
     # For every edge boundary: determine range of PAs spanned by lines
     # connecting circle center to the two vertices bounding that edge:
-    pas_verts = circ.center.position_angle(vertices).to(u.deg)
+    pas_verts = circ_center.position_angle(vertices).to(u.deg)
 
     pas_verts_wrap, wrap_ang = _validate_vertices_ordering(
         vertices, circ, gc_center=circ_center,
@@ -479,7 +560,7 @@ def _discretize_edge_boundary(vertices, circ, n_points,
 
     # Calculate directional offsets to get boundary discretization,
     # with vertices as SkyCoords
-    bound_verts = circ.center.directional_offset_by(theta, circ_radius)
+    bound_verts = circ_center.directional_offset_by(theta, circ_radius)
 
     return bound_verts
 
