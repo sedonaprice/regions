@@ -17,6 +17,7 @@ from regions.shapes.annulus import (CircleAnnulusPixelRegion,
                                     CircleAnnulusSphericalSkyRegion,
                                     EllipseAnnulusPixelRegion,
                                     EllipseAnnulusSkyRegion,
+                                    EllipseAnnulusSphericalSkyRegion,
                                     RectangleAnnulusPixelRegion,
                                     RectangleAnnulusSkyRegion,
                                     RectangleAnnulusSphericalSkyRegion)
@@ -457,6 +458,129 @@ class TestEllipseAnnulusSkyRegion(BaseTestSkyRegion):
 
         # Validate ordering of vertices:
         assert not regskydiscr.contains(self.reg.center, wcs)
+
+
+class TestEllipseAnnulusSphericalSkyRegion(BaseTestSphericalSkyRegion):
+    inside = [(3 * u.deg, 4.0083 * u.deg)]
+    outside = [(3 * u.deg, 7 * u.deg)]
+    meta = RegionMeta({'text': 'test'})
+    visual = RegionVisual({'color': 'blue'})
+    skycoord = SkyCoord(3 * u.deg, 4 * u.deg, frame='icrs')
+    reg = EllipseAnnulusSphericalSkyRegion(skycoord, 20 * u.arcsec, 50 * u.arcsec,
+                                           50 * u.arcsec, 80 * u.arcsec, meta=meta,
+                                           visual=visual)
+
+    expected_repr = ('<EllipseAnnulusSphericalSkyRegion(center=<SkyCoord (ICRS): '
+                     '(ra, dec) in deg\n    (3., 4.)>, inner_width=20.0 '
+                     'arcsec, outer_width=50.0 arcsec, inner_height=50.0 '
+                     'arcsec, outer_height=80.0 arcsec, angle=0.0 deg)>')
+    expected_str = ('Region: EllipseAnnulusSphericalSkyRegion\ncenter: <SkyCoord '
+                    '(ICRS): (ra, dec) in deg\n    (3., 4.)>\ninner_width: '
+                    '20.0 arcsec\nouter_width: 50.0 arcsec\n'
+                    'inner_height: 50.0 arcsec\nouter_height: '
+                    '80.0 arcsec\nangle: 0.0 deg')
+    wcs = make_simple_wcs(skycoord, 5 * u.arcsec, 20)
+
+    def test_init(self):
+        assert_quantity_allclose(self.reg.center.ra, self.skycoord.ra)
+        assert_quantity_allclose(self.reg.inner_width, 20 * u.arcsec)
+        assert_quantity_allclose(self.reg.inner_height, 50 * u.arcsec)
+
+    def test_copy(self):
+        reg = self.reg.copy()
+        assert_allclose(reg.center.ra.deg, 3)
+        assert_allclose(reg.inner_width.to_value('arcsec'), 20)
+        assert_allclose(reg.inner_height.to_value('arcsec'), 50)
+        assert_allclose(reg.outer_width.to_value('arcsec'), 50)
+        assert_allclose(reg.outer_height.to_value('arcsec'), 80)
+        assert_allclose(reg.angle.to_value('deg'), 0)
+        assert reg.meta == self.meta
+        assert reg.visual == self.visual
+
+    def test_contains(self):
+        assert not self.reg.contains(self.skycoord)
+        test_coord = SkyCoord(3 * u.deg, 10 * u.deg, frame='icrs')
+        assert not self.reg.contains(test_coord)
+
+    def test_eq(self):
+        reg = self.reg.copy()
+        assert reg == self.reg
+        reg.outer_height = 85 * u.arcsec
+        assert reg != self.reg
+
+    def test_transformation(self):
+        pixannulus = self.reg.to_pixel(wcs=self.wcs)
+        assert isinstance(pixannulus, EllipseAnnulusPixelRegion)
+
+        skyannulus = self.reg.to_sky(wcs=self.wcs)
+        assert isinstance(skyannulus, EllipseAnnulusSkyRegion)
+
+        polysky = self.reg.to_sky(self.wcs, include_boundary_distortions=True)
+        assert isinstance(polysky, CompoundSkyRegion)
+
+        polypix = self.reg.to_pixel(self.wcs, include_boundary_distortions=True)
+        assert isinstance(polypix, CompoundPixelRegion)
+
+    def test_transformation_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_pixel(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+    def test_frame_transformation(self):
+        reg2 = self.reg.transform_to('galactic')
+        assert reg2.center == self.reg.center.transform_to('galactic')
+        assert_allclose(reg2.inner_width.to_value('arcsec'), 20)
+        assert isinstance(reg2, EllipseAnnulusSphericalSkyRegion)
+        assert reg2.frame.name == 'galactic'
+
+    def test_bounding_circle(self):
+        skycoord = SkyCoord(3 * u.deg, 4 * u.deg)
+        circ = CircleSphericalSkyRegion(skycoord, 80 * u.arcsec)
+
+        bounding_circle = self.reg.bounding_circle
+        assert bounding_circle == circ
+
+    def test_bounding_lonlat(self):
+        skycoord = SkyCoord(3 * u.deg, 0 * u.deg)
+        reg = EllipseAnnulusSphericalSkyRegion(skycoord, 20 * u.arcsec, 50 * u.arcsec,
+                                               50 * u.arcsec, 80 * u.arcsec)
+        bounding_lonlat = reg.bounding_lonlat
+
+        assert_quantity_allclose(bounding_lonlat[0],
+                                 Longitude([2.9929861111111142 * u.deg,
+                                            3.007013888888886 * u.deg]))
+
+        assert_quantity_allclose(bounding_lonlat[1],
+                                 Latitude([-0.011222222222222222 * u.deg,
+                                           0.011222222222211243 * u.deg]))
+
+        skycoord2 = SkyCoord(3 * u.deg, 90 * u.deg)
+        reg2 = EllipseAnnulusSphericalSkyRegion(skycoord2, 20 * u.arcsec, 50 * u.arcsec,
+                                                50 * u.arcsec, 80 * u.arcsec)
+        bounding_lonlat2 = reg2.bounding_lonlat
+
+        assert bounding_lonlat2[0] is None
+
+        assert_quantity_allclose(bounding_lonlat2[1],
+                                 Latitude([89.98877777777747 * u.deg,
+                                           90 * u.deg]))
+
+        skycoord3 = SkyCoord(3 * u.deg, -90 * u.deg)
+        reg3 = EllipseAnnulusSphericalSkyRegion(skycoord3, 20 * u.arcsec, 50 * u.arcsec,
+                                                50 * u.arcsec, 80 * u.arcsec)
+        bounding_lonlat3 = reg3.bounding_lonlat
+
+        assert bounding_lonlat3[0] is None
+
+        assert_quantity_allclose(bounding_lonlat3[1],
+                                 Latitude([-90 * u.deg,
+                                           -89.98877777777747 * u.deg]))
 
 
 class TestRectangleAnnulusPixelRegion(BaseTestPixelRegion):

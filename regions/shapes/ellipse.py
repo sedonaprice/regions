@@ -11,18 +11,23 @@ import numpy as np
 from astropy.coordinates import Angle
 
 from regions._geometry import elliptical_overlap_grid
+from regions._utils.spherical_helpers import (
+    discretize_spherical_ellipse_boundary, spherical_ellipse_contains)
 from regions._utils.wcs_helpers import pixel_scale_angle_at_skycoord
 from regions.core.attributes import (PositiveScalar, PositiveScalarAngle,
                                      RegionMetaDescr, RegionVisualDescr,
                                      ScalarAngle, ScalarPixCoord,
                                      ScalarSkyCoord)
 from regions.core.bounding_box import RegionBoundingBox
-from regions.core.core import PixelRegion, SkyRegion
+from regions.core.core import PixelRegion, SkyRegion, SphericalSkyRegion
 from regions.core.mask import RegionMask
 from regions.core.metadata import RegionMeta, RegionVisual
 from regions.core.pixcoord import PixCoord
 
-__all__ = ['EllipsePixelRegion', 'EllipseSkyRegion']
+from .circle import CircleSphericalSkyRegion
+from .polygon import PolygonPixelRegion, PolygonSphericalSkyRegion
+
+__all__ = ['EllipsePixelRegion', 'EllipseSkyRegion', 'EllipseSphericalSkyRegion']
 
 
 class EllipsePixelRegion(PixelRegion):
@@ -164,7 +169,28 @@ class EllipsePixelRegion(PixelRegion):
 
     def to_spherical_sky(self, wcs=None, include_boundary_distortions=False,
                          discretize_kwargs=None):
-        raise NotImplementedError
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires planar to spherical projection (using WCS) and discretization
+            # Will require implementing discretization in pixel space
+            # to get correct handling of distortions.
+            raise NotImplementedError
+
+            # ### Potential solution:
+            # # Leverage polygon class to_spherical_sky() functionality without
+            # # distortions, as the distortions were already computed in creating
+            # # that polygon approximation
+            # return self.discretize_boundary(**discretize_kwargs).to_spherical_sky(
+            #     wcs=wcs, include_boundary_distortions=False
+            # )
+
+        return self.to_sky(wcs).to_spherical_sky()
 
     @property
     def bounding_box(self):
@@ -453,4 +479,233 @@ class EllipseSkyRegion(SkyRegion):
 
     def to_spherical_sky(self, wcs=None, include_boundary_distortions=False,
                          discretize_kwargs=None):
-        raise NotImplementedError
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires planar to spherical projection (using WCS) and discretization
+            # Will require implementing discretization in pixel space
+            # to get correct handling of distortions.
+            raise NotImplementedError
+
+            # ### Potential solution:
+            # # Leverage polygon class to_spherical_sky() functionality without
+            # # distortions, as the distortions were already computed in creating
+            # # that polygon approximation
+            # return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
+            #     wcs=wcs, include_boundary_distortions=False
+            # )
+
+        return EllipseSphericalSkyRegion(
+            self.center.copy(), self.width.copy(), self.height.copy(),
+            meta=self.meta.copy(), visual=self.visual.copy()
+        )
+
+
+class EllipseSphericalSkyRegion(SphericalSkyRegion):
+    """
+    An ellipse defined using spherical sky coordinates.
+
+    Parameters
+    ----------
+    center : `~astropy.coordinates.SkyCoord`
+        The position of the center of the ellipse.
+    width : `~astropy.units.Quantity`
+        The width of the ellipse (before rotation) as an angle.
+    height : `~astropy.units.Quantity`
+        The height of the ellipse (before rotation) as an angle.
+    angle : `~astropy.units.Quantity`, optional
+        The rotation angle of the ellipse, measured anti-clockwise. If
+        set to zero (the default), the width axis is lined up with the
+        longitude axis of the celestial coordinates.
+    meta : `~regions.RegionMeta` or `dict`, optional
+        A dictionary that stores the meta attributes of the region.
+    visual : `~regions.RegionVisual` or `dict`, optional
+        A dictionary that stores the visual meta attributes of the
+        region.
+    """
+
+    _params = ('center', 'width', 'height', 'angle')
+    center = ScalarSkyCoord('The center position as a |SkyCoord|.')
+    width = PositiveScalarAngle('The width of the ellipse (before rotation) '
+                                'as a |Quantity| angle.')
+    height = PositiveScalarAngle('The height of the ellipse (before rotation) '
+                                 'as a |Quantity| angle.')
+    angle = ScalarAngle('The rotation angle measured anti-clockwise as a '
+                        '|Quantity| angle.')
+    meta = RegionMetaDescr('The meta attributes as a |RegionMeta|')
+    visual = RegionVisualDescr('The visual attributes as a |RegionVisual|.')
+
+    def __init__(self, center, width, height, angle=0. * u.deg, meta=None,
+                 visual=None):
+        self.center = center
+        self.width = width
+        self.height = height
+        self.angle = angle
+        self.meta = meta or RegionMeta()
+        self.visual = visual or RegionVisual()
+
+        self._is_inner_annulus = False
+
+    def _get_sph_angle_transf(
+        self, center_transf, frame, merge_attributes=True
+    ):
+        # To determine angle transformation:
+        # Put a test point on the ellipse at angle, width/2
+        # (eg, on the "width" axis of the ellipse),
+        # transform that point, and then determine the angle
+        # in the new coord frame
+
+        # SkyCoord.directional_offset_by uses PA defined
+        # as angle E of N, so offset ellipse angle by -90 deg
+        width_point = self.center.directional_offset_by(
+            self.angle - 90 * u.deg, self.width / 2.
+        )
+        width_point_transf = width_point.transform_to(
+            frame, merge_attributes=merge_attributes
+        )
+
+        # SkyCoord.position_angle returns angle E of N,
+        # so offset by +90 deg to get ellipse angle definition
+        angle_transf = center_transf.position_angle(
+            width_point_transf
+        ) + 90 * u.deg
+
+        return angle_transf
+
+    def contains(self, coord):
+        in_ell = spherical_ellipse_contains(
+            coord, self.center, self.width, self.height, self.angle
+        )
+        if self.meta.get('include', True):
+            return in_ell
+        else:
+            return np.logical_not(in_ell)
+
+    @property
+    def bounding_circle(self):
+        radius = np.max(
+            [self.width.value, self.height.to(self.width.unit).value]
+        ) * self.width.unit
+        return CircleSphericalSkyRegion(
+            center=self.center.copy(),
+            radius=radius
+        )
+
+    def _get_padded_polygon_approximation(self, fac=1):
+        # Enable dilation or contraction with fac
+        padfac = 0.01
+        padmax = 4 * u.arcsec
+        maxdim = np.max(
+            [self.width.value, self.height.to(self.width.unit).value]
+        ) * self.width.unit
+        if maxdim > padmax / padfac:
+            pad_width = pad_height = padmax
+            n_points = 1000
+        else:
+            pad_width = self.width * padfac
+            pad_height = self.height * padfac
+            n_points = 100
+
+        ell_pad = EllipseSphericalSkyRegion(
+            self.center.copy(),
+            self.width.copy() + fac * pad_width,
+            self.height.copy() + fac * pad_height,
+            angle=self.angle.copy()
+        )
+        return ell_pad.discretize_boundary(n_points=n_points)
+
+    @property
+    def bounding_lonlat(self):
+        # Do an approximation, as fully general computation
+        # would be very complex to work out the spherical geometry
+        # and tangent points for:
+        # Increase width, height by a few arcsec / 1% if small?
+        # Discretize that padded ellipse boundary
+        # Get bounding lonlat of that polygon and return
+        fac = -1 if self._is_inner_annulus else 1
+
+        poly_pad = self._get_padded_polygon_approximation(fac=fac)
+
+        return poly_pad.bounding_lonlat
+
+    def transform_to(self, frame, merge_attributes=True):
+        # Assuming a spherical -> spherical frame transformation:
+        frame = self._validate_frame(frame)
+
+        center_transf = self.center.transform_to(
+            frame, merge_attributes=merge_attributes
+        )
+
+        angle_transf = self._get_sph_angle_transf(
+            center_transf, frame, merge_attributes=merge_attributes
+        )
+
+        return EllipseSphericalSkyRegion(
+            center_transf,
+            self.width.copy(),
+            self.height.copy(),
+            angle_transf,
+            self.meta.copy(),
+            self.visual.copy()
+        )
+
+    def discretize_boundary(self, n_points=100):
+        bound_verts = discretize_spherical_ellipse_boundary(
+            self.center, self.width, self.height, self.angle,
+            n_points
+        )
+        return PolygonSphericalSkyRegion(bound_verts)
+
+    def to_pixel(
+        self,
+        wcs=None,
+        include_boundary_distortions=False,
+        discretize_kwargs=None,
+    ):
+        if include_boundary_distortions:
+
+            if discretize_kwargs is None:
+                discretize_kwargs = {}
+
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires spherical to planar projection (from WCS) and discretization
+            verts = wcs.world_to_pixel(
+                self.discretize_boundary(**discretize_kwargs).vertices
+            )
+            return PolygonPixelRegion(
+                PixCoord(*verts), meta=self.meta.copy(), visual=self.visual.copy()
+            )
+
+        return self.to_sky().to_pixel(wcs)
+
+    def to_sky(
+        self, wcs=None, include_boundary_distortions=False, discretize_kwargs=None
+    ):
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires spherical to planar projection (from WCS) and discretization
+            # Use to_pixel(), then apply "small angle approx" to get planar sky.
+            return self.to_pixel(
+                include_boundary_distortions=include_boundary_distortions,
+                wcs=wcs,
+                discretize_kwargs=discretize_kwargs,
+            ).to_sky(wcs)
+
+        return EllipseSkyRegion(
+            self.center, self.width, self.height, self.angle,
+            meta=self.meta.copy(), visual=self.visual.copy()
+        )

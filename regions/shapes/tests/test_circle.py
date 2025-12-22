@@ -267,7 +267,7 @@ class TestCircleSphericalSkyRegion(BaseTestSphericalSkyRegion):
         estr = "'center' must be a scalar SkyCoord"
         assert estr in str(excinfo.value)
 
-    def test_contains(self, wcs):
+    def test_contains(self):
         position = SkyCoord([1, 3] * u.deg, [2, 4] * u.deg)
         # 1,2 is outside, 3,4 is the center and is inside
         assert all(self.reg.contains(position)
@@ -281,7 +281,7 @@ class TestCircleSphericalSkyRegion(BaseTestSphericalSkyRegion):
 
     def test_zero_size(self):
         with pytest.raises(ValueError):
-            CircleSkyRegion(SkyCoord(3 * u.deg, 4 * u.deg), 0. * u.arcsec)
+            CircleSphericalSkyRegion(SkyCoord(3 * u.deg, 4 * u.deg), 0. * u.arcsec)
 
     def test_bounding_circle(self):
         skycoord = SkyCoord(3 * u.deg, 4 * u.deg, frame='galactic')

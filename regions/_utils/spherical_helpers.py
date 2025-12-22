@@ -131,8 +131,21 @@ def bounding_lonlat_poles_processing(region, lons_arr, lats_arr, inner_region=No
     # Inner region set: annulus logic:
     pole_contains = inner_region.contains(poles)
     if np.any(pole_contains):
-        lats_raw_inner = get_circle_latitude_tangent_limits(inner_region.center,
-                                                            inner_region.radius)
+        # If region is a circle -- look for radius attribute, to avoid importing
+        # region classes:
+        if hasattr(inner_region, 'radius'):
+            lats_raw_inner = get_circle_latitude_tangent_limits(inner_region.center,
+                                                                inner_region.radius)
+
+        # Handle with poligonization approximation:
+        elif hasattr(inner_region, '_get_padded_polygon_approximation'):
+            _, lats_raw_inner = inner_region._get_padded_polygon_approximation().bounding_lonlat
+
+        else:
+            # Otherwise, do non-padded polygon approx:
+            n_points = 1000
+            poly_pad = inner_region.discretize_boundary(n_points=n_points)
+            _, lats_raw_inner = poly_pad.bounding_lonlat
 
         # S pole:
         if pole_contains[0]:
@@ -648,3 +661,201 @@ def discretize_all_edge_boundaries(vertices, circs, n_points):
             )
 
     return all_edge_bound_verts
+
+# def _get_foci_astropy(coord, angle, a, b):
+#     # Alternative using astropy coordinates offsets:
+#     omega_half = np.arccos(np.cos(a)/np.cos(b)).to(u.deg)
+
+#     p1 = coord.directional_offset_by(angle - 90*u.deg, omega_half)
+#     p2 = coord.directional_offset_by(90*u.deg - angle, omega_half)
+#     return p1, p2
+
+
+def _get_foci_direct_calc(coord, angle, a, b):
+    # Direct calculation of foci positions using
+    # center position, ellipse orientation angle (with respect to the
+    # semi major axis), and the semi major and minor axes lengths
+
+    # Foci locations with respect to Ellipse region conventions
+    # derived by C. P. Price (personal communication).
+
+    c_cart = coord.frame.represent_as('cartesian')
+    c_x = c_cart.x.value
+    c_y = c_cart.y.value
+    c_z = c_cart.z.value
+
+    cos_oh = np.cos(a) / np.cos(b)
+    sin_oh = np.sqrt(1 - cos_oh ** 2)
+
+    r_planar = np.sqrt(c_x ** 2 + c_y ** 2)
+
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+
+    x_a = cos_oh * c_x
+    x_b = sin_oh / r_planar * (-c_y * cos_angle + c_x * c_z * sin_angle)
+
+    y_a = cos_oh * c_y
+    y_b = sin_oh / r_planar * (c_x * cos_angle + c_y * c_z * sin_angle)
+
+    z_a = cos_oh * c_z
+    z_b = - sin_oh * (r_planar * sin_angle)
+
+    _, lat1, lon1 = cartesian_to_spherical(x_a - x_b, y_a - y_b, z_a - z_b)
+    _, lat2, lon2 = cartesian_to_spherical(x_a + x_b, y_a + y_b, z_a + z_b)
+
+    p1 = SkyCoord(lon1, lat1, frame=coord.frame)
+    p2 = SkyCoord(lon2, lat2, frame=coord.frame)
+    return p1, p2
+
+
+def _spherical_ellipse_contains_ab(coord, center, a, b, angle):
+    # Case where a > b:
+
+    # Get foci:
+    p1, p2 = _get_foci_direct_calc(center, angle, a, b)
+
+    # Get separations of coordinates and foci:
+    sep_p1 = p1.separation(coord)
+    sep_p2 = p2.separation(coord)
+
+    # Contains: sep_p1 + sep_p2 < 2a
+    return (sep_p1 + sep_p2 < 2 * a)
+
+
+def _spherical_ellipse_boundary_offsets(a, b, theta):
+    # Centered at x axis, with a > b:
+    a_cos_theta = np.tan(a) * np.cos(theta)
+    b_sin_theta = np.tan(b) * np.sin(theta)
+
+    bound_colat = np.arccos(
+        b_sin_theta / np.sqrt(
+            1 + a_cos_theta ** 2 + b_sin_theta ** 2
+        )
+    )
+    bound_lat = (90 * u.deg).to(u.radian) - bound_colat
+    bound_lon = np.arctan2(- a_cos_theta, 1)
+
+    _, orig_lat, orig_lon = cartesian_to_spherical(1, 0, 0)
+
+    bound_pts = SkyCoord(bound_lon, bound_lat)
+    origin = SkyCoord(orig_lon, orig_lat)
+
+    ang_seps = origin.separation(bound_pts)
+    pas = origin.position_angle(bound_pts).to(u.deg) + 90 * u.deg
+
+    # Return angular separations and PAs:
+    return ang_seps, pas
+
+
+def spherical_ellipse_contains(coord, center, width, height, angle):
+    """
+    Determine whether a coordinate is contained within a spherical
+    ellipse.
+
+    Parameters
+    ----------
+    coord : `~astropy.coordinates.SkyCoord`
+        The position or positions to check.
+
+    center : `~astropy.coordinates.SkyCoord`
+        The spherical ellipse center as a SkyCoord.
+
+    width : `~astropy.units.Quantity`
+        The ellipse width, as an angle.
+
+    height : `~astropy.units.Quantity`
+        The ellipse height, as an angle.
+
+    angle : `~astropy.units.Quantity`, optional
+        The ellipse rotation angle, measured anti-clockwise
+        from West (angle North of West),
+        where the width axis is aligned with the longitude axis
+        if the angle is 0.
+    """
+    # Handle subcases:
+    # If width and height are equal -- just handle as a circle:
+    if width == height:
+        return center.separation(coord) < width / 2.
+    elif width > height:
+        # Semi major is half width, and the angle is the
+        # same as in the ellipse definition:
+        return _spherical_ellipse_contains_ab(
+            coord, center, width / 2., height / 2., angle
+        )
+    else:
+        # Semi major is half height, and the angle is
+        # 90 deg + ellipse angle
+        return _spherical_ellipse_contains_ab(
+            coord, center, height / 2., width / 2.,
+            angle.to(u.deg) + 90 * u.deg
+        )
+
+
+def discretize_spherical_ellipse_boundary(
+    center, width, height, angle, n_points
+):
+    """
+    Discretize the boundary of a spherical ellipse.
+
+    Parameters
+    ----------
+    center : `~astropy.coordinates.SkyCoord`
+        The spherical ellipse center as a SkyCoord.
+
+    width : `~astropy.units.Quantity`
+        The ellipse width, as an angle.
+
+    height : `~astropy.units.Quantity`
+        The ellipse height, as an angle.
+
+    angle : `~astropy.units.Quantity`, optional
+        The ellipse rotation angle, measured anti-clockwise
+        from West (angle North of West),
+        where the width axis is aligned with the longitude axis
+        if the angle is 0.
+
+    n_points : int
+        The number of points for discretization along the boundary.
+
+    Returns
+    -------
+    verts : `~astropy.coordinates.SkyCoord`
+        The discretized boundary vertices.
+    """
+    theta = np.linspace(0, 1, num=n_points, endpoint=False) * 360 * u.deg
+
+    # Need to invert order because of CW convention:
+    theta = theta[::-1]
+
+    # Handle subcases:
+    # If width and height are equal -- just handle as a circle:
+    if width == height:
+        return center.directional_offset_by(theta, width / 2.)
+    elif width > height:
+        # Semi major is half width, and the angle is the
+        # same as in the ellipse definition:
+        offsets, pas = _spherical_ellipse_boundary_offsets(
+            width / 2., height / 2., theta
+        )
+
+        # SkyCoord.directional_offset_by uses PA defined
+        # as angle E of N, so offset ellipse angle by -90 deg
+        return center.directional_offset_by(
+            # theta + angle - 90 * u.deg,
+            pas + angle - 90 * u.deg,
+            offsets
+        )
+
+    else:
+        # Semi major is half height, and the angle is
+        # 90 deg + ellipse angle
+        offsets, pas = _spherical_ellipse_boundary_offsets(
+            height / 2., width / 2., theta
+        )
+        # SkyCoord.directional_offset_by uses PA defined
+        # as angle E of N, so offset ellipse angle by -90 deg
+        # -- cancelling out the other offset.
+        return center.directional_offset_by(
+            pas + angle, offsets
+        )
