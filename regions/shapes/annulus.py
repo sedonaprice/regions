@@ -20,14 +20,17 @@ from regions.core.metadata import RegionMeta, RegionVisual
 from regions.core.pixcoord import PixCoord
 from regions.shapes.circle import CirclePixelRegion, CircleSphericalSkyRegion
 from regions.shapes.ellipse import EllipsePixelRegion, EllipseSkyRegion
-from regions.shapes.rectangle import RectanglePixelRegion, RectangleSkyRegion
+from regions.shapes.rectangle import (RectanglePixelRegion, RectangleSkyRegion,
+                                      RectangleSphericalSkyRegion)
 
 __all__ = ['AnnulusPixelRegion', 'AnnulusSphericalSkyRegion',
            'AsymmetricAnnulusPixelRegion',
            'AsymmetricAnnulusSkyRegion',
-           'CircleAnnulusPixelRegion', 'CircleAnnulusSkyRegion', 'CircleAnnulusSphericalSkyRegion',
+           'CircleAnnulusPixelRegion', 'CircleAnnulusSkyRegion',
+           'CircleAnnulusSphericalSkyRegion',
            'EllipseAnnulusPixelRegion', 'EllipseAnnulusSkyRegion',
-           'RectangleAnnulusPixelRegion', 'RectangleAnnulusSkyRegion']
+           'RectangleAnnulusPixelRegion', 'RectangleAnnulusSkyRegion',
+           'RectangleAnnulusSphericalSkyRegion']
 
 
 class AnnulusPixelRegion(PixelRegion, abc.ABC):
@@ -605,6 +608,97 @@ class AsymmetricAnnulusSkyRegion(SkyRegion):
                 angle)
 
 
+class AsymmetricAnnulusSphericalSkyRegion(AnnulusSphericalSkyRegion):
+    """
+    Helper class for asymmetric annuli spherical sky regions.
+
+    Used for ellipse and rectangle spherical sky annulus regions.
+
+    Parameters
+    ----------
+    center : `~astropy.coordinates.SkyCoord`
+        The position of the center of the annulus.
+    inner_width : `~astropy.units.Quantity`
+        The inner width of the annulus (before rotation) as an angle.
+    outer_width : `~astropy.units.Quantity`
+        The outer width of the annulus (before rotation) as an angle.
+    inner_height : `~astropy.units.Quantity`
+        The inner height of the annulus (before rotation) as an angle.
+    outer_height : `~astropy.units.Quantity`
+        The outer height of the annulus (before rotation) as an angle.
+    angle : `~astropy.units.Quantity`, optional
+        The rotation angle of the annulus, measured anti-clockwise. If
+        set to zero (the default), the width axis is lined up with the
+        longitude axis of the celestial coordinates.
+    meta : `~regions.RegionMeta` or `dict`, optional
+        A dictionary that stores the meta attributes of the region.
+    visual : `~regions.RegionVisual` or `dict`, optional
+        A dictionary that stores the visual meta attributes of the
+        region.
+    """
+
+    _params = ('center', 'inner_width', 'outer_width', 'inner_height',
+               'outer_height', 'angle')
+
+    center = ScalarSkyCoord('The center position as a |SkyCoord|.')
+    inner_width = PositiveScalarAngle('The inner width (before rotation) as '
+                                      'a |Quantity| angle.')
+    outer_width = PositiveScalarAngle('The outer width (before rotation) as '
+                                      'a |Quantity| angle.')
+    inner_height = PositiveScalarAngle('The inner height (before rotation) '
+                                       'as a |Quantity| angle.')
+    outer_height = PositiveScalarAngle('The outer height (before rotation) '
+                                       'as a |Quantity| angle.')
+    angle = ScalarAngle('The rotation angle measured anti-clockwise as a'
+                        '|Quantity| angle.')
+    meta = RegionMetaDescr('The meta attributes as a |RegionMeta|')
+    visual = RegionVisualDescr('The visual attributes as a |RegionVisual|.')
+
+    def __init__(self, center, inner_width, outer_width, inner_height,
+                 outer_height, angle=0 * u.deg, meta=None, visual=None):
+        self.center = center
+        self.inner_width = inner_width
+        self.outer_width = outer_width
+        self.inner_height = inner_height
+        self.outer_height = outer_height
+        self.angle = angle
+        self.meta = meta or RegionMeta()
+        self.visual = visual or RegionVisual()
+
+        if inner_width >= outer_width:
+            raise ValueError('outer_width must be greater than inner_width')
+        if inner_height >= outer_height:
+            raise ValueError('outer_height must be greater than inner_height')
+
+    @property
+    def _inner_region(self):
+        return self._component_class(self.center, self.inner_width,
+                                     self.inner_height, self.angle,
+                                     self.meta, self.visual)
+
+    @property
+    def _outer_region(self):
+        return self._component_class(self.center, self.outer_width,
+                                     self.outer_height, self.angle,
+                                     self.meta, self.visual)
+
+    def to_pixel_args(self, wcs):
+        center, pixscale, north_angle = pixel_scale_angle_at_skycoord(
+            self.center, wcs)
+        center = PixCoord(center.x, center.y)
+        inner_width = (self.inner_width / pixscale).to(u.pix).value
+        outer_width = (self.outer_width / pixscale).to(u.pix).value
+        inner_height = (self.inner_height / pixscale).to(u.pix).value
+        outer_height = (self.outer_height / pixscale).to(u.pix).value
+        # region sky angles are defined relative to the WCS longitude axis;
+        # photutils aperture sky angles are defined as the PA of the
+        # semimajor axis (i.e., relative to the WCS latitude axis)
+        angle = self.angle + (north_angle - 90 * u.deg)
+
+        return (center, inner_width, outer_width, inner_height, outer_height,
+                angle)
+
+
 class EllipseAnnulusPixelRegion(AsymmetricAnnulusPixelRegion):
     """
     A elliptical annulus in pixel coordinates.
@@ -838,7 +932,28 @@ class RectangleAnnulusPixelRegion(AsymmetricAnnulusPixelRegion):
 
     def to_spherical_sky(self, wcs=None, include_boundary_distortions=False,
                          discretize_kwargs=None):
-        raise NotImplementedError
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires planar to spherical projection (using WCS) and discretization
+            # Will require implementing discretization in pixel space
+            # to get correct handling of distortions.
+            raise NotImplementedError
+
+            # ### Potential solution:
+            # # Leverage polygon class to_spherical_sky() functionality without
+            # # distortions, as the distortions were already computed in creating
+            # # that polygon approximation
+            # return self.discretize_boundary(**discretize_kwargs).to_spherical_sky(
+            #     wcs=wcs, include_boundary_distortions=False
+            # )
+
+        return self.to_sky(wcs).to_spherical_sky()
 
 
 class RectangleAnnulusSkyRegion(AsymmetricAnnulusSkyRegion):
@@ -901,4 +1016,183 @@ class RectangleAnnulusSkyRegion(AsymmetricAnnulusSkyRegion):
 
     def to_spherical_sky(self, wcs=None, include_boundary_distortions=False,
                          discretize_kwargs=None):
-        raise NotImplementedError
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires planar to spherical projection (using WCS) and discretization
+            # Will require implementing discretization in pixel space
+            # to get correct handling of distortions.
+            raise NotImplementedError
+
+            # ### Potential solution:
+            # # Leverage polygon class to_spherical_sky() functionality without
+            # # distortions, as the distortions were already computed in creating
+            # # that polygon approximation
+            # return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
+            #     wcs=wcs, include_boundary_distortions=False
+            # )
+
+        return RectangleAnnulusSphericalSkyRegion(
+            self.center.copy(),
+            self.inner_width.copy(),
+            self.outer_width.copy(),
+            self.inner_height.copy(),
+            self.outer_height.copy(),
+            self.angle.copy(),
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+
+class RectangleAnnulusSphericalSkyRegion(AsymmetricAnnulusSphericalSkyRegion):
+    """
+    A rectangular annulus in spherical `~astropy.coordinates.SkyCoord`
+    coordinates.
+
+    Parameters
+    ----------
+    center : `~astropy.coordinates.SkyCoord`
+        The position of the center of the rectangular annulus.
+    inner_width : `~astropy.units.Quantity`
+        The inner width of the rectangular annulus (before rotation) as
+        an angle.
+    outer_width : `~astropy.units.Quantity`
+        The outer width of the rectangular annulus (before rotation) as
+        an angle.
+    inner_height : `~astropy.units.Quantity`
+        The inner height of the rectangular annulus (before rotation) as
+        an angle.
+    outer_height : `~astropy.units.Quantity`
+        The outer height of the rectangular annulus (before rotation) as
+        an angle.
+    angle : `~astropy.units.Quantity`, optional
+        The rotation angle of the rectangular annulus, measured
+        anti-clockwise. If set to zero (the default), the width axis is
+        lined up with the longitude axis of the celestial coordinates.
+    meta : `~regions.RegionMeta` or `dict`, optional
+        A dictionary that stores the meta attributes of the region.
+    visual : `~regions.RegionVisual` or `dict`, optional
+        A dictionary that stores the visual meta attributes of the
+        region.
+    """
+
+    # duplicated from AsymmetricAnnulusSphericalSkyRegion because otherwise Sphinx
+    # ignores the docstrings in the parent class
+    center = ScalarSkyCoord('The center position as a |SkyCoord|.')
+    inner_width = PositiveScalarAngle('The inner width (before rotation) as '
+                                      'a |Quantity| angle.')
+    outer_width = PositiveScalarAngle('The outer width (before rotation) as '
+                                      'a |Quantity| angle.')
+    inner_height = PositiveScalarAngle('The inner height (before rotation) '
+                                       'as a |Quantity| angle.')
+    outer_height = PositiveScalarAngle('The outer height (before rotation) '
+                                       'as a |Quantity| angle.')
+    angle = ScalarAngle('The rotation angle measured anti-clockwise as a '
+                        '|Quantity| angle.')
+
+    _component_class = RectangleSphericalSkyRegion
+
+    def __init__(self, center, inner_width, outer_width, inner_height,
+                 outer_height, angle=0 * u.deg, meta=None, visual=None):
+        super().__init__(center, inner_width, outer_width, inner_height,
+                         outer_height, angle, meta, visual)
+
+    def transform_to(self, frame, merge_attributes=True):
+        frame = self._validate_frame(frame)
+
+        # Only center and angles transform, width+height preserved
+        center_transf = self.center.transform_to(frame, merge_attributes=merge_attributes)
+
+        angle_transf = self._inner_region._get_sph_angle_transf(
+            center_transf, frame, merge_attributes=merge_attributes
+        )
+
+        return RectangleAnnulusSphericalSkyRegion(
+            center_transf,
+            self.inner_width.copy(),
+            self.outer_width.copy(),
+            self.inner_height.copy(),
+            self.outer_height.copy(),
+            angle_transf,
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+    def discretize_boundary(self, n_points=100):
+        return CompoundSphericalSkyRegion(
+            self._inner_region.discretize_boundary(n_points=n_points),
+            self._outer_region.discretize_boundary(n_points=n_points),
+            operator=operator.xor,
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+    def to_sky(
+            self,
+            wcs=None,
+            include_boundary_distortions=False,
+            discretize_kwargs=None
+    ):
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires spherical to planar projection (from WCS) and discretization
+            # Use to_pixel(), then apply "small angle approx" to get planar sky.
+            return self.to_pixel(
+                include_boundary_distortions=include_boundary_distortions,
+                wcs=wcs,
+                discretize_kwargs=discretize_kwargs,
+            ).to_sky(wcs)
+
+        return RectangleAnnulusSkyRegion(
+            self.center.copy(),
+            self.inner_width.copy(),
+            self.outer_width.copy(),
+            self.inner_height.copy(),
+            self.outer_height.copy(),
+            self.angle.copy(),
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+    def to_pixel(
+            self,
+            wcs=None,
+            include_boundary_distortions=False,
+            discretize_kwargs=None,
+    ):
+        if include_boundary_distortions:
+            from .polygon import PolygonPixelRegion
+
+            if discretize_kwargs is None:
+                discretize_kwargs = {}
+
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires spherical to planar projection (from WCS) and discretization
+            polygonized = self.discretize_boundary(**discretize_kwargs)
+
+            inner_vertices = wcs.world_to_pixel(polygonized.region1.vertices)
+            outer_vertices = wcs.world_to_pixel(polygonized.region2.vertices)
+
+            return CompoundPixelRegion(
+                PolygonPixelRegion(PixCoord(*inner_vertices)),
+                PolygonPixelRegion(PixCoord(*outer_vertices)),
+                operator=operator.xor,
+                meta=self.meta.copy(),
+                visual=self.visual.copy()
+            )
+
+        return self.to_sky().to_pixel(wcs)

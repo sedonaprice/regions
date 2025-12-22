@@ -313,7 +313,12 @@ class CircleSphericalSkyRegion(SphericalSkyRegion):
 
     @property
     def bounding_circle(self):
-        return self.copy()
+        # return self.copy()
+        # Don't include meta, visual in bounding circle:
+        return CircleSphericalSkyRegion(
+            center=self.center.copy(),
+            radius=self.radius.copy()
+        )
 
     @property
     def bounding_lonlat(self):

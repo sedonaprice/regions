@@ -121,19 +121,20 @@ def test_pix_to_sky(region):
 def test_pix_to_spherical_sky(region, include_dist):
     # TODO: remove expected failures when implemented
     # Expected failure:
-    #    No spherical Ellipse, EllipseAnnulus, RectangleAnnulus
+    #    No spherical Ellipse, EllipseAnnulus
     # Also expected failure:
     #    Boundary distortions not yet implemented for
-    #    CirclePixelRegion, CircleAnnulusPixelRegion, RectanglePixelRegion, PolygonPixelRegion
+    #    CirclePixelRegion, CircleAnnulusPixelRegion, RectanglePixelRegion, RectangleAnnulusPixelRegion,
+    #    PolygonPixelRegion
     if (
         isinstance(region,
                    (EllipsePixelRegion,
-                    EllipseAnnulusPixelRegion,
-                    RectangleAnnulusPixelRegion))
+                    EllipseAnnulusPixelRegion))
         | ((isinstance(region,
                        (CirclePixelRegion,
                         CircleAnnulusPixelRegion,
                         RectanglePixelRegion,
+                        RectangleAnnulusPixelRegion,
                         PolygonPixelRegion))) & include_dist)
     ):
         with pytest.raises(NotImplementedError):
@@ -182,19 +183,20 @@ def test_sky_to_pix(region):
 def test_sky_to_spherical_sky(region, include_dist):
     # TODO: remove expected failures when implemented
     # Expected failure:
-    #    No spherical Ellipse, EllipseAnnulus, RectangleAnnulus
+    #    No spherical Ellipse, EllipseAnnulus
     # Also expected failure:
     #    Boundary distortions not yet implemented for
-    #    CircleSkyRegion, CircleAnnulusSkyRegion, RectangleSkyRegion, PolygonSkyRegion
+    #    CircleSkyRegion, CircleAnnulusSkyRegion, RectangleSkyRegion, RectangleAnnulusSkyRegion,
+    #    PolygonSkyRegion
     if (
         isinstance(region,
                    (EllipseSkyRegion,
-                    EllipseAnnulusSkyRegion,
-                    RectangleAnnulusSkyRegion))
+                    EllipseAnnulusSkyRegion))
         | ((isinstance(region,
                        (CircleSkyRegion,
                         CircleAnnulusSkyRegion,
                         RectangleSkyRegion,
+                        RectangleAnnulusSkyRegion,
                         PolygonSkyRegion))) & include_dist)
     ):
         with pytest.raises(NotImplementedError):

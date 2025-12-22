@@ -130,8 +130,8 @@ Rectangle
     >>> from astropy.coordinates import SkyCoord
     >>> from astropy import units as u
     >>> from regions import PixCoord
-    >>> from regions import RectangleSkyRegion, RectanglePixelRegion,
-    ...                     RectangleSphericalSkyRegion
+    >>> from regions import (RectangleSkyRegion, RectanglePixelRegion,
+    ...                      RectangleSphericalSkyRegion)
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = RectangleSkyRegion(center=center_sky,
