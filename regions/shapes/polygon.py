@@ -142,10 +142,6 @@ class PolygonPixelRegion(PixelRegion):
             #     wcs=wcs, include_boundary_distortions=False
             # )
 
-        # TODO: ensure vertices are in CW order,
-        # as implicitly a planar -> spherical polygon will not be the
-        # "large" complement polygon on the sphere?
-
         return self.to_sky(wcs).to_spherical_sky()
 
     @property
@@ -626,8 +622,8 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
 
         return PolygonSkyRegion(
             self.vertices,
-            meta=self.meta,
-            visual=self.visual
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
         )
 
     def to_pixel(
