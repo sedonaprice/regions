@@ -3,7 +3,7 @@
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Latitude, Longitude, SkyCoord
 from astropy.io import fits
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils.data import get_pkg_data_filename
@@ -12,9 +12,13 @@ from numpy.testing import assert_allclose, assert_equal
 
 from regions._utils.optional_deps import HAS_MATPLOTLIB
 from regions.core import PixCoord, RegionMeta, RegionVisual
-from regions.shapes.ellipse import EllipsePixelRegion, EllipseSkyRegion
+from regions.shapes.circle import CircleSphericalSkyRegion
+from regions.shapes.ellipse import (EllipsePixelRegion, EllipseSkyRegion,
+                                    EllipseSphericalSkyRegion)
+from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
-                                              BaseTestSkyRegion)
+                                              BaseTestSkyRegion,
+                                              BaseTestSphericalSkyRegion)
 from regions.tests.helpers import make_simple_wcs
 
 
@@ -328,3 +332,128 @@ class TestEllipseSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.width = 3 * u.deg
         assert reg != self.reg
+
+
+class TestEllipseSphericalSkyRegion(BaseTestSphericalSkyRegion):
+    inside = [(3 * u.deg, 4 * u.deg)]
+    outside = [(3 * u.deg, 0 * u.deg)]
+    meta = RegionMeta({'text': 'test'})
+    visual = RegionVisual({'color': 'blue'})
+    reg = EllipseSphericalSkyRegion(SkyCoord(3 * u.deg, 4 * u.deg),
+                                    4 * u.arcsec, 2 * u.arcsec,
+                                    angle=30 * u.deg,
+                                    meta=meta, visual=visual)
+
+    expected_repr = ('<EllipseSphericalSkyRegion(center=<SkyCoord (ICRS): (ra, dec) in '
+                     'deg\n    (3., 4.)>, width=4.0 arcsec, height=2.0 arcsec, '
+                     'angle=30.0 deg)>')
+    expected_str = ('Region: EllipseSphericalSkyRegion\ncenter: <SkyCoord (ICRS): '
+                    '(ra, dec) in deg\n    (3., 4.)>\nwidth: 4.0 arcsec'
+                    '\nheight: 2.0 arcsec\nangle: 30.0 deg')
+
+    def test_copy(self):
+        reg = self.reg.copy()
+        assert_allclose(reg.center.ra.deg, 3)
+        assert_allclose(reg.width.to_value('arcsec'), 4)
+        assert_allclose(reg.height.to_value('arcsec'), 2)
+        assert_allclose(reg.angle.to_value('deg'), 30)
+        assert reg.meta == self.meta
+        assert reg.visual == self.visual
+
+    def test_transformation(self, wcs):
+        skycoord = SkyCoord(3 * u.deg, 4 * u.deg, frame='galactic')
+        sphskyellipse = EllipseSphericalSkyRegion(skycoord, 4 * u.arcsec,
+                                                  2 * u.arcsec, angle=30 * u.deg)
+
+        pixellipse = sphskyellipse.to_pixel(wcs)
+
+        assert_allclose(pixellipse.center.x, -50.5)
+        assert_allclose(pixellipse.center.y, 299.5)
+        assert_allclose(pixellipse.height, 0.027777777777828305)
+        assert_allclose(pixellipse.width, 0.05555555555565661)
+
+        skyellipse = self.reg.to_sky(wcs)
+        assert isinstance(skyellipse, EllipseSkyRegion)
+
+        sphskyellipse2 = pixellipse.to_spherical_sky(wcs)
+
+        assert_quantity_allclose(sphskyellipse.center.data.lon,
+                                 sphskyellipse2.center.data.lon)
+        assert_quantity_allclose(sphskyellipse.center.data.lat,
+                                 sphskyellipse2.center.data.lat)
+        assert_quantity_allclose(sphskyellipse.width, sphskyellipse2.width)
+        assert_quantity_allclose(sphskyellipse.height, sphskyellipse2.height)
+
+        polysky = sphskyellipse.to_sky(wcs, include_boundary_distortions=True)
+        assert isinstance(polysky, PolygonSkyRegion)
+
+        polypix = sphskyellipse.to_pixel(wcs, include_boundary_distortions=True)
+        assert isinstance(polypix, PolygonPixelRegion)
+
+    def test_transformation_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_pixel(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+    def test_frame_transformation(self):
+        skycoord = SkyCoord(3 * u.deg, 4 * u.deg, frame='galactic')
+        reg = EllipseSphericalSkyRegion(skycoord, 4 * u.arcsec,
+                                        2 * u.arcsec, angle=30 * u.deg)
+
+        reg2 = reg.transform_to('icrs')
+        assert reg2.center == skycoord.transform_to('icrs')
+        assert_allclose(reg2.width.to_value('arcsec'), 4)
+        assert isinstance(reg2, EllipseSphericalSkyRegion)
+        assert reg2.frame.name == 'icrs'
+
+    def test_dimension_center(self):
+        center = SkyCoord([1, 2] * u.deg, [3, 4] * u.deg)
+        width = height = 2 * u.arcsec
+        angle = 30 * u.deg
+        with pytest.raises(ValueError) as excinfo:
+            EllipseSphericalSkyRegion(center, width, height, angle)
+        estr = "'center' must be a scalar SkyCoord"
+        assert estr in str(excinfo.value)
+
+    def test_contains(self):
+        # Add a test confirming rotation is correct:
+        position = SkyCoord([3 * u.deg - 1.5 * u.arcsec, 3 * u.deg - 1.5 * u.arcsec],
+                            [4 * u.deg + 1 * u.arcsec, 4 * u.deg - 1 * u.arcsec])
+        # first is inside, second is outside
+        assert all(self.reg.contains(position)
+                   == np.array([True, False], dtype='bool'))
+
+    def test_eq(self):
+        reg = self.reg.copy()
+        assert reg == self.reg
+        reg.width = 3 * u.arcsec
+        assert reg != self.reg
+
+    def test_zero_size(self):
+        with pytest.raises(ValueError):
+            EllipseSphericalSkyRegion(SkyCoord(3 * u.deg, 4 * u.deg), 0. * u.arcsec,
+                                      4 * u.arcsec, angle=30 * u.deg)
+
+    def test_bounding_circle(self):
+        skycoord = SkyCoord(3 * u.deg, 4 * u.deg, frame='icrs')
+        reg = CircleSphericalSkyRegion(skycoord, 4 * u.arcsec)
+
+        bounding_circle = self.reg.bounding_circle
+        assert bounding_circle == reg
+
+    def test_bounding_lonlat(self):
+        bounding_lonlat = self.reg.bounding_lonlat
+
+        assert_quantity_allclose(bounding_lonlat[0],
+                                 Longitude([2.9994932098008498 * u.deg,
+                                            3.000506789937744 * u.deg]))
+
+        assert_quantity_allclose(bounding_lonlat[1],
+                                 Latitude([3.999628954395713 * u.deg,
+                                           4.000371045505152 * u.deg]))

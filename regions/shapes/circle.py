@@ -267,7 +267,8 @@ class CircleSkyRegion(SkyRegion):
             # )
 
         return CircleSphericalSkyRegion(
-            self.center, self.radius, meta=self.meta, visual=self.visual
+            self.center.copy(), self.radius.copy(),
+            meta=self.meta.copy(), visual=self.visual.copy()
         )
 
 

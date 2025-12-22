@@ -76,14 +76,16 @@ and `~regions.CircleAnnulusSphericalSkyRegion`
 Ellipse
 *******
 
-`~regions.EllipseSkyRegion` and `~regions.EllipsePixelRegion`
+`~regions.EllipseSkyRegion`, `~regions.EllipsePixelRegion`, and
+`~regions.EllipseSphericalSkyRegion`
 
 .. code-block:: python
 
     >>> from astropy.coordinates import SkyCoord
     >>> from astropy import units as u
     >>> from regions import PixCoord
-    >>> from regions import EllipseSkyRegion, EllipsePixelRegion
+    >>> from regions import (EllipseSkyRegion, EllipsePixelRegion,
+    ...                      EllipseSphericalSkyRegion)
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = EllipseSkyRegion(center=center_sky,
@@ -92,17 +94,22 @@ Ellipse
     >>> region_pix = EllipsePixelRegion(center=PixCoord(x=42, y=43),
     ...                                 height=4.2, width=4.2,
     ...                                 angle=5 * u.deg)
+    >>> region_sph_sky = EllipseSphericalSkyRegion(center=center_sky,
+    ...                               height=3 * u.deg, width=3 * u.deg,
+    ...                               angle=5 * u.deg)
 
 
-`~regions.EllipseAnnulusSkyRegion` and
-`~regions.EllipseAnnulusPixelRegion`
+`~regions.EllipseAnnulusSkyRegion`
+`~regions.EllipseAnnulusPixelRegion`, and
+`~regions.EllipseAnnulusSphericalSkyRegion`
 
 .. code-block:: python
 
     >>> from astropy.coordinates import SkyCoord
     >>> from astropy import units as u
     >>> from regions import PixCoord
-    >>> from regions import EllipseAnnulusSkyRegion, EllipseAnnulusPixelRegion
+    >>> from regions import (EllipseAnnulusSkyRegion, EllipseAnnulusPixelRegion,
+    ...                      EllipseAnnulusSphericalSkyRegion)
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = EllipseAnnulusSkyRegion(center=center_sky,
@@ -117,6 +124,12 @@ Ellipse
     ...                                        inner_height=7.2,
     ...                                        outer_height=8.2,
     ...                                        angle=6 * u.deg)
+    >>> region_sph_sky = EllipseAnnulusSphericalSkyRegion(center=center_sky,
+    ...                                      inner_width=3 * u.deg,
+    ...                                      outer_width=4 * u.deg,
+    ...                                      inner_height=6 * u.deg,
+    ...                                      outer_height=7 * u.deg,
+    ...                                      angle=6 * u.deg)
 
 
 Rectangle
@@ -145,15 +158,17 @@ Rectangle
     ...                                 angle=5 * u.deg)
 
 
-`~regions.RectangleAnnulusSkyRegion` and
-`~regions.RectangleAnnulusPixelRegion`
+`~regions.RectangleAnnulusSkyRegion`,
+`~regions.RectangleAnnulusPixelRegion`, and
+`~regions.RectangleAnnulusSphericalSkyRegion`,
 
 .. code-block:: python
 
     >>> from astropy.coordinates import SkyCoord
     >>> from astropy import units as u
-    >>> from regions import PixCoord, RectangleAnnulusSkyRegion
-    >>> from regions import RectangleAnnulusPixelRegion
+    >>> from regions import PixCoord
+    >>> from regions import (RectangleAnnulusPixelRegion, RectangleAnnulusSkyRegion,
+    ...                      RectangleAnnulusSphericalSkyRegion)
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = RectangleAnnulusSkyRegion(center=center_sky,
@@ -168,6 +183,12 @@ Rectangle
     ...                                          inner_height=7.2,
     ...                                          outer_height=8.2,
     ...                                          angle=15 * u.deg)
+    >>> region_sph_sky = RectangleAnnulusSphericalSkyRegion(center=center_sky,
+    ...                                        inner_width=3 * u.deg,
+    ...                                        outer_width=4 * u.deg,
+    ...                                        inner_height=6 * u.deg,
+    ...                                        outer_height=7 * u.deg,
+    ...                                        angle=15 * u.deg)
 
 
 Polygon
