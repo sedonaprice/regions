@@ -631,6 +631,23 @@ class RectangleSphericalSkyRegion(SphericalSkyRegion):
 
         return ref_pts
 
+    def _get_sph_angle_transf(
+        self, center_transf, frame, merge_attributes=True
+    ):
+
+        ref_pts = self._get_sph_rect_ref_points()
+        # Ref points in CW order: w2, h2, w1, h1
+        w2_ref_pt_transf = ref_pts[0].transform_to(
+            frame, merge_attributes=merge_attributes
+        )
+
+        # Account for definition differences:
+        # SkyCoord.directional_offset_by takes PA defined E of N
+        # Rect angle is angle N of W.
+        angle_transf = center_transf.position_angle(w2_ref_pt_transf).to(u.deg) + 90 * u.deg
+
+        return angle_transf
+
     @property
     def _edge_circs(self):
         """
@@ -715,16 +732,9 @@ class RectangleSphericalSkyRegion(SphericalSkyRegion):
             frame, merge_attributes=merge_attributes
         )
 
-        ref_pts = self._get_sph_rect_ref_points()
-        # Ref points in CW order: w2, h2, w1, h1
-        w2_ref_pt_transf = ref_pts[0].transform_to(
-            frame, merge_attributes=merge_attributes
+        angle_transf = self._get_sph_angle_transf(
+            center_transf, frame, merge_attributes=merge_attributes
         )
-
-        # Account for definition differences:
-        # SkyCoord.directional_offset_by takes PA defined E of N
-        # Rect angle is angle N of W.
-        angle_transf = center_transf.position_angle(w2_ref_pt_transf).to(u.deg) + 90 * u.deg
 
         return RectangleSphericalSkyRegion(
             center_transf,
