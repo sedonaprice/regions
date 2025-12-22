@@ -3,7 +3,7 @@
 import astropy.units as u
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Latitude, Longitude, SkyCoord
 from astropy.io import fits
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils.data import get_pkg_data_filename
@@ -12,11 +12,14 @@ from numpy.testing import assert_allclose, assert_equal
 
 from regions._utils.optional_deps import HAS_MATPLOTLIB
 from regions.core import PixCoord, RegionMeta, RegionVisual
+from regions.shapes.circle import CircleSphericalSkyRegion
 from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
-from regions.shapes.rectangle import RectanglePixelRegion, RectangleSkyRegion
+from regions.shapes.rectangle import (RectanglePixelRegion, RectangleSkyRegion,
+                                      RectangleSphericalSkyRegion)
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
-                                              BaseTestSkyRegion)
-from regions.tests.helpers import make_simple_wcs
+                                              BaseTestSkyRegion,
+                                              BaseTestSphericalSkyRegion)
+from regions.tests.helpers import assert_skycoord_allclose, make_simple_wcs
 
 
 @pytest.fixture(scope='session', name='wcs')
@@ -385,3 +388,142 @@ class TestRectangleSkyRegion(BaseTestSkyRegion):
         reg2.height = self.reg.height * 0.75
         reg2disc = reg2.discretize_boundary(wcs, n_points=10)
         assert regskydiscr.contains(reg2disc.vertices, wcs).all()
+
+
+class TestRectangleSphericalSkyRegion(BaseTestSphericalSkyRegion):
+    inside = [(3.1 * u.deg, 3.5 * u.deg)]
+    outside = [(3 * u.deg, 0 * u.deg),
+               (5 * u.deg, 5.5 * u.deg),
+               (5 * u.deg, 2.5 * u.deg),
+               (1 * u.deg, 5.5 * u.deg),
+               (1 * u.deg, 2.5 * u.deg)]
+    meta = RegionMeta({'text': 'test'})
+    visual = RegionVisual({'color': 'blue'})
+    reg = RectangleSphericalSkyRegion(
+        center=SkyCoord(3, 4, unit='deg'),
+        width=4 * u.deg,
+        height=3 * u.deg,
+        angle=5 * u.deg,
+        meta=meta, visual=visual
+    )
+
+    expected_repr = ('<RectangleSphericalSkyRegion(center=<SkyCoord (ICRS): (ra, dec) '
+                     'in deg\n    (3., 4.)>, width=4.0 deg, height=3.0 deg, '
+                     'angle=5.0 deg)>')
+    expected_str = ('Region: RectangleSphericalSkyRegion\ncenter: <SkyCoord '
+                    '(ICRS): (ra, dec) in deg\n    (3., 4.)>\nwidth: '
+                    '4.0 deg\nheight: 3.0 deg\nangle: 5.0 deg')
+
+    def test_copy(self):
+        reg = self.reg.copy()
+        assert_allclose(reg.center.ra.deg, 3)
+        assert_allclose(reg.width.to_value('deg'), 4)
+        assert_allclose(reg.height.to_value('deg'), 3)
+        assert_allclose(reg.angle.to_value('deg'), 5)
+        assert reg.meta == self.meta
+        assert reg.visual == self.visual
+
+    def test_contains(self):
+        position = SkyCoord([1, 3] * u.deg, [2, 4] * u.deg)
+        # 1,2 is outside, 3,4 is the center and is inside
+        assert all(self.reg.contains(position)
+                   == np.array([False, True], dtype='bool'))
+
+    def test_eq(self):
+        reg = self.reg.copy()
+        assert reg == self.reg
+        reg.angle = 10 * u.deg
+        assert reg != self.reg
+
+    def test_transformation(self, wcs):
+        rectpix = self.reg.to_pixel(wcs)
+        assert isinstance(rectpix, RectanglePixelRegion)
+        assert_allclose(rectpix.center.x, -5121.630682)
+        assert_allclose(rectpix.center.y, -2772.880381)
+        assert_allclose(rectpix.width, 218.800939)
+        assert_allclose(rectpix.height, 164.100704)
+        assert_allclose(rectpix.angle, 33.759714 * u.deg)
+
+        rectsky = self.reg.to_sky(wcs)
+        assert isinstance(rectsky, RectangleSkyRegion)
+        assert_allclose(rectsky.center.ra, 3 * u.deg)
+        assert_allclose(rectsky.center.dec, 4 * u.deg)
+        assert_allclose(rectsky.width, 4 * u.deg)
+        assert_allclose(rectsky.height, 3 * u.deg)
+        assert_allclose(rectsky.angle, 5 * u.deg)
+
+        rectsky2 = rectsky.to_spherical_sky(wcs)
+
+        assert_quantity_allclose(self.reg.vertices.ra.deg,
+                                 rectsky2.vertices.ra.deg)
+        assert_quantity_allclose(self.reg.vertices.dec.deg,
+                                 rectsky2.vertices.dec.deg)
+
+        rectsky3 = self.reg.to_sky(wcs,
+                                   include_boundary_distortions=True,
+                                   discretize_kwargs={'n_points': 10})
+        assert isinstance(rectsky3, PolygonSkyRegion)
+        assert len(rectsky3.vertices) == 40
+
+        rectpix2 = self.reg.to_pixel(wcs,
+                                     include_boundary_distortions=True,
+                                     discretize_kwargs={'n_points': 10})
+        assert isinstance(rectpix2, PolygonPixelRegion)
+        assert len(rectpix2.vertices) == 40
+
+    def test_transformation_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_pixel(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
+    def test_frame_transformation(self):
+        reg = self.reg.transform_to('galactic')
+        assert_skycoord_allclose(reg.center,
+                                 self.reg.center.transform_to('galactic'))
+        assert_skycoord_allclose(reg.vertices,
+                                 self.reg.vertices.transform_to('galactic'))
+        assert isinstance(reg, RectangleSphericalSkyRegion)
+        assert reg.frame.name == 'galactic'
+        assert reg != self.reg
+
+    def test_vertices(self):
+        verts = SkyCoord([
+            0.875250716565182,
+            4.8625318299088764,
+            5.131601254758139,
+            1.1298702814317392
+        ] * u.deg, [
+            2.678142502994819,
+            2.3302256021899868,
+            5.31635743151583,
+            5.665544393284605,
+        ] * u.deg)
+
+        assert_skycoord_allclose(self.reg.vertices, verts)
+
+    def test_bounding_circle(self):
+        skycoord = SkyCoord(3. * u.deg,
+                            4. * u.deg,
+                            frame='icrs')
+        reg = CircleSphericalSkyRegion(skycoord,
+                                       2.49926948357099 * u.deg)
+
+        bc = self.reg.bounding_circle
+        assert bc == reg
+
+    def test_bounding_lonlat(self):
+        bounding_lonlat = self.reg.bounding_lonlat
+
+        assert_quantity_allclose(bounding_lonlat[0],
+                                 Longitude([0.8752507165651822 * u.deg,
+                                            5.131601254758139 * u.deg]))
+
+        assert_quantity_allclose(bounding_lonlat[1],
+                                 Latitude([2.3302256021899868 * u.deg,
+                                           5.665544393284605 * u.deg]))

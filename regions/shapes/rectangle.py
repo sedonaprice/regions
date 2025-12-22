@@ -3,25 +3,32 @@
 This module defines rectangular regions in both pixel and sky
 coordinates.
 """
+import operator
 
 import astropy.units as u
 import numpy as np
-from astropy.coordinates import Angle
+from astropy.coordinates import Angle, SkyCoord
 
 from regions._geometry import rectangular_overlap_grid
+from regions._utils.spherical_helpers import (
+    cross_product_skycoord2skycoord, discretize_all_edge_boundaries,
+    get_edge_raw_lonlat_bounds_circ_edges)
 from regions._utils.wcs_helpers import pixel_scale_angle_at_skycoord
 from regions.core.attributes import (PositiveScalar, PositiveScalarAngle,
                                      RegionMetaDescr, RegionVisualDescr,
                                      ScalarAngle, ScalarPixCoord,
                                      ScalarSkyCoord)
 from regions.core.bounding_box import RegionBoundingBox
-from regions.core.core import PixelRegion, SkyRegion
+from regions.core.compound import CompoundSphericalSkyRegion
+from regions.core.core import PixelRegion, SkyRegion, SphericalSkyRegion
 from regions.core.mask import RegionMask
 from regions.core.metadata import RegionMeta, RegionVisual
 from regions.core.pixcoord import PixCoord
-from regions.shapes.polygon import PolygonPixelRegion
+from regions.shapes.circle import CircleSphericalSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion,
+                                    PolygonSphericalSkyRegion)
 
-__all__ = ['RectanglePixelRegion', 'RectangleSkyRegion']
+__all__ = ['RectanglePixelRegion', 'RectangleSkyRegion', 'RectangleSphericalSkyRegion']
 
 
 class RectanglePixelRegion(PixelRegion):
@@ -173,7 +180,28 @@ class RectanglePixelRegion(PixelRegion):
 
     def to_spherical_sky(self, wcs=None, include_boundary_distortions=False,
                          discretize_kwargs=None):
-        raise NotImplementedError
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires planar to spherical projection (using WCS) and discretization
+            # Will require implementing discretization in pixel space
+            # to get correct handling of distortions.
+            raise NotImplementedError
+
+            # ### Potential solution:
+            # # Leverage polygon class to_spherical_sky() functionality without
+            # # distortions, as the distortions were already computed in creating
+            # # that polygon approximation
+            # return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
+            #     wcs=wcs, include_boundary_distortions=False
+            # )
+
+        return self.to_sky(wcs).to_spherical_sky()
 
     @property
     def bounding_box(self):
@@ -505,4 +533,268 @@ class RectangleSkyRegion(SkyRegion):
 
     def to_spherical_sky(self, wcs=None, include_boundary_distortions=False,
                          discretize_kwargs=None):
-        raise NotImplementedError
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires planar to spherical projection (using WCS) and discretization
+            # Will require implementing discretization in pixel space
+            # to get correct handling of distortions.
+            raise NotImplementedError
+
+            # ### Potential solution:
+            # # Leverage polygon class to_spherical_sky() functionality without
+            # # distortions, as the distortions were already computed in creating
+            # # that polygon approximation
+            # return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
+            #     wcs=wcs, include_boundary_distortions=False
+            # )
+
+        return RectangleSphericalSkyRegion(
+            self.center.copy(),
+            self.width.copy(),
+            self.height.copy(),
+            self.angle.copy(),
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+
+class RectangleSphericalSkyRegion(SphericalSkyRegion):
+    """
+    A rectangle in spherical sky coordinates.
+
+    Parameters
+    ----------
+    center : `~astropy.coordinates.SkyCoord`
+        The position of the center of the rectangle.
+    width : `~astropy.units.Quantity`
+        The width of the rectangle (before rotation) as an angle.
+    height : `~astropy.units.Quantity`
+        The height of the rectangle (before rotation) as an angle.
+    angle : `~astropy.units.Quantity`, optional
+        The rotation angle of the rectangle, measured anti-clockwise. If
+        set to zero (the default), the width axis is lined up with the
+        longitude axis of the celestial coordinates.
+    meta : `~regions.RegionMeta` or `dict`, optional
+        A dictionary that stores the meta attributes of the region.
+    visual : `~regions.RegionVisual` or `dict`, optional
+        A dictionary that stores the visual meta attributes of the
+        region.
+    """
+
+    _params = ('center', 'width', 'height', 'angle')
+    center = ScalarSkyCoord('The center position as a |SkyCoord|.')
+    width = PositiveScalarAngle('The width of the rectangle (before rotation) '
+                                'as a |Quantity| angle.')
+    height = PositiveScalarAngle('The height of the rectangle (before '
+                                 'rotation) as a |Quantity| angle.')
+    angle = ScalarAngle('The rotation angle measured anti-clockwise as a '
+                        '|Quantity| angle.')
+    meta = RegionMetaDescr('The meta attributes as a |RegionMeta|')
+    visual = RegionVisualDescr('The visual attributes as a |RegionVisual|.')
+
+    def __init__(self, center, width, height, angle=0 * u.deg, meta=None,
+                 visual=None):
+        self.center = center
+        self.width = width
+        self.height = height
+        self.angle = angle
+        self.meta = meta or RegionMeta()
+        self.visual = visual or RegionVisual()
+
+    def _get_sph_rect_ref_points(self):
+        # Ref points in CW order: w2, h2, w1, h1
+        #   -------- h1 --------
+        #  |                    |
+        #  w1        c          w2
+        #  |                    |
+        #   -------- h2 --------
+        # with the entire rectangle rotated by self.angle
+        # Account for definition differences:
+        # SkyCoord.directional_offset_by takes PA defined E of N
+        # Rect angle is angle N of W.
+
+        ref_pts = []
+        ref_pts.append(self.center.directional_offset_by(self.angle.to(u.deg) - 90 * u.deg,
+                                                         0.5 * self.width))
+        ref_pts.append(self.center.directional_offset_by(self.angle.to(u.deg) + 180 * u.deg,
+                                                         0.5 * self.height))
+        ref_pts.append(self.center.directional_offset_by(self.angle.to(u.deg) + 90 * u.deg,
+                                                         0.5 * self.width))
+        ref_pts.append(self.center.directional_offset_by(self.angle.to(u.deg),
+                                                         0.5 * self.height))
+
+        return ref_pts
+
+    @property
+    def _edge_circs(self):
+        """
+        Get list of the great circles defining the rectangle boundaries.
+        """
+        ref_pts = self._get_sph_rect_ref_points()
+        # Ref points in CW order: w2, h2, w1, h1
+
+        ref_c_gcs = [cross_product_skycoord2skycoord(ref_pt, self.center) for ref_pt in ref_pts]
+
+        gcs = []
+        for i in range(len(ref_c_gcs)):
+            c_gc = cross_product_skycoord2skycoord(
+                ref_c_gcs[i], ref_pts[i],
+            )
+            gcs.append(CircleSphericalSkyRegion(c_gc, 90 * u.deg))
+
+        return gcs
+
+    @property
+    def _compound_region(self):
+        # Need N great circles to define boundaries for an N-sided polygon -- here, a rectangle
+        # verts are in CW order: Cross product to get bounding great circle centers
+        # Compute GCs and stack into a compound set:
+        compreg = None
+        gcs = self._edge_circs
+        for gc in gcs:
+            if compreg is None:
+                compreg = gc
+            else:
+                compreg = CompoundSphericalSkyRegion(
+                    compreg, gc, operator.and_, self.meta, self.visual,
+                )
+
+        return compreg
+
+    @property
+    def vertices(self):
+        """
+        Spherical rectangle vertices, in clockwise order, starting from
+        the SW vertex as ween on the sky (if angle=0).
+        """
+        verts = []
+        gcs = self._edge_circs
+        for i in range(len(gcs)):
+            # Wrap around at 0:
+            # ind_other = (i + 2) % len(gcs)
+            # ind = (i + 1) % len(gcs)
+            ind_other = (i + 1) % len(gcs)
+            ind = (i) % len(gcs)
+            verts.append(cross_product_skycoord2skycoord(
+                gcs[ind].center, gcs[ind_other].center
+            ))
+
+        return SkyCoord(verts)
+
+    def contains(self, coord):
+        return self._compound_region.contains(coord)
+
+    @property
+    def bounding_circle(self):
+        # Same bounding circle as for a polygon:
+        cent = self.center
+        seps = cent.separation(self.vertices)
+        return CircleSphericalSkyRegion(center=cent, radius=np.max(seps))
+
+    @property
+    def bounding_lonlat(self):
+        # Same bounding lon/lat as for a polygon:
+        lons_arr, lats_arr = get_edge_raw_lonlat_bounds_circ_edges(
+            self.vertices, self.center, self._edge_circs
+        )
+
+        lons_arr, lats_arr = self._validate_lonlat_bounds(lons_arr, lats_arr)
+
+        return lons_arr, lats_arr
+
+    def transform_to(self, frame, merge_attributes=True):
+        frame = self._validate_frame(frame)
+
+        center_transf = self.center.transform_to(
+            frame, merge_attributes=merge_attributes
+        )
+
+        ref_pts = self._get_sph_rect_ref_points()
+        # Ref points in CW order: w2, h2, w1, h1
+        w2_ref_pt_transf = ref_pts[0].transform_to(
+            frame, merge_attributes=merge_attributes
+        )
+
+        # Account for definition differences:
+        # SkyCoord.directional_offset_by takes PA defined E of N
+        # Rect angle is angle N of W.
+        angle_transf = center_transf.position_angle(w2_ref_pt_transf).to(u.deg) + 90 * u.deg
+
+        return RectangleSphericalSkyRegion(
+            center_transf,
+            self.width.copy(),
+            self.height.copy(),
+            angle_transf,
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+    def discretize_boundary(self, n_points=10):
+        bound_verts = discretize_all_edge_boundaries(
+            self.vertices, self._edge_circs, n_points
+        )
+        return PolygonSphericalSkyRegion(bound_verts)
+
+    def to_sky(
+            self,
+            wcs=None,
+            include_boundary_distortions=False,
+            discretize_kwargs=None
+    ):
+
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires spherical to planar projection (from WCS) and discretization
+            # Use to_pixel(), then apply "small angle approx" to get planar sky.
+            return self.to_pixel(
+                include_boundary_distortions=include_boundary_distortions,
+                wcs=wcs,
+                discretize_kwargs=discretize_kwargs,
+            ).to_sky(wcs)
+
+        return RectangleSkyRegion(
+            self.center.copy(),
+            self.width.copy(),
+            self.height.copy(),
+            self.angle.copy(),
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
+    def to_pixel(
+            self,
+            wcs=None,
+            include_boundary_distortions=False,
+            discretize_kwargs=None,
+    ):
+
+        if discretize_kwargs is None:
+            discretize_kwargs = {}
+        if include_boundary_distortions:
+            if wcs is None:
+                raise ValueError(
+                    "'wcs' must be set if 'include_boundary_distortions'=True"
+                )
+            # Requires spherical to planar projection (from WCS) and discretization
+            verts = wcs.world_to_pixel(
+                self.discretize_boundary(**discretize_kwargs).vertices
+            )
+
+            return PolygonPixelRegion(
+                PixCoord(*verts), meta=self.meta.copy(),
+                visual=self.visual.copy()
+            )
+
+        return self.to_sky().to_pixel(wcs)

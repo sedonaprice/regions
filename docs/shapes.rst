@@ -122,14 +122,16 @@ Ellipse
 Rectangle
 *********
 
-`~regions.RectangleSkyRegion` and `~regions.RectanglePixelRegion`
+`~regions.RectangleSkyRegion`, `~regions.RectanglePixelRegion`, and
+`~regions.RectangleSphericalSkyRegion`
 
 .. code-block:: python
 
     >>> from astropy.coordinates import SkyCoord
     >>> from astropy import units as u
     >>> from regions import PixCoord
-    >>> from regions import RectangleSkyRegion, RectanglePixelRegion
+    >>> from regions import RectangleSkyRegion, RectanglePixelRegion,
+    ...                     RectangleSphericalSkyRegion
 
     >>> center_sky = SkyCoord(42, 43, unit='deg', frame='fk5')
     >>> region_sky = RectangleSkyRegion(center=center_sky,
@@ -138,6 +140,9 @@ Rectangle
     >>> region_pix = RectanglePixelRegion(center=PixCoord(x=42, y=43),
     ...                                   width=3, height=4,
     ...                                   angle=5 * u.deg)
+    >>> region_sph_sky = RectangleSphericalSkyRegion(center=center_sky,
+    ...                                 width=3 * u.deg, height=4 * u.deg,
+    ...                                 angle=5 * u.deg)
 
 
 `~regions.RectangleAnnulusSkyRegion` and
