@@ -119,13 +119,14 @@ class RectanglePixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object.
+            Planar PolygonPixelRegion object, with vertices in clockwise order.
         """
         t = np.linspace(0, 1, num=n_points, endpoint=False)
 
         # The four rectangle vertices or corners
         x, y = self.corners.T
-        vertices = PixCoord(x=x, y=y)
+        # Need to invert order because of CW convention:
+        vertices = PixCoord(x=x[::-1], y=y[::-1])
 
         all_edge_bound_verts = None
         for i in range(len(vertices)):
@@ -479,7 +480,7 @@ class RectangleSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object.
+            Planar PolygonSkyRegion object, with vertices in clockwise order.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion

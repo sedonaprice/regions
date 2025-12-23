@@ -120,7 +120,7 @@ class EllipsePixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object.
+            Planar PolygonPixelRegion object, with vertices in clockwise order.
         """
         # Avoid circular imports:
         from .polygon import PolygonPixelRegion
@@ -128,6 +128,8 @@ class EllipsePixelRegion(PixelRegion):
         cos_angle = np.cos(self.angle)
         sin_angle = np.sin(self.angle)
         theta = np.linspace(0, 1, num=n_points, endpoint=False) * 360 * u.deg
+        # Need to invert order because of CW convention:
+        theta = theta[::-1]
         cos_theta = np.cos(theta.to(u.radian))
         sin_theta = np.sin(theta.to(u.radian))
         xs = (
@@ -426,7 +428,7 @@ class EllipseSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object.
+            Planar PolygonSkyRegion object, with vertices in clockwise order.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion

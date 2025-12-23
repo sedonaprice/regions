@@ -98,12 +98,14 @@ class CirclePixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object.
+            Planar PolygonPixelRegion object, with vertices in clockwise order.
         """
         # Avoid circular imports:
         from .polygon import PolygonPixelRegion
 
         theta = np.linspace(0, 1, num=n_points, endpoint=False) * 360 * u.deg
+        # Need to invert order because of CW convention:
+        theta = theta[::-1]
         xs = self.center.x + np.cos(theta.to(u.radian)) * self.radius
         ys = self.center.y + np.sin(theta.to(u.radian)) * self.radius
 
@@ -283,7 +285,7 @@ class CircleSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object.
+            Planar PolygonSkyRegion object, with vertices in clockwise order.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion

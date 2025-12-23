@@ -130,15 +130,30 @@ class PolygonPixelRegion(PixelRegion):
         """
         t = np.linspace(0, 1, num=n_points, endpoint=False)
 
+        vertices = self.vertices.copy()
+
+        # Check the cross product of the vectors
+        # connecting the first two vertices and the
+        # # mean "centroid":
+        i = 0
+        x_ = self.vertices.x - self.vertices.x.mean()
+        y_ = self.vertices.y - self.vertices.y.mean()
+        if np.cross(
+            [x_[i], y_[i], 0],
+            [x_[i + 1], y_[i + 1], 0]
+        )[2] > 0:
+            # If z value is positive, this is CCW order, and invert:
+            vertices = vertices[::-1]
+
         all_edge_bound_verts = None
-        for i in range(len(self.vertices)):
+        for i in range(len(vertices)):
             # Endpoints of one edge: vertices[i-1], vertices[i]
 
-            xs = self.vertices[i - 1].x + t * (
-                self.vertices[i].x - self.vertices[i - 1].x
+            xs = vertices[i - 1].x + t * (
+                vertices[i].x - vertices[i - 1].x
             )
-            ys = self.vertices[i - 1].y + t * (
-                self.vertices[i].y - self.vertices[i - 1].y
+            ys = vertices[i - 1].y + t * (
+                vertices[i].y - vertices[i - 1].y
             )
             bound_verts = PixCoord(xs, ys)
 
