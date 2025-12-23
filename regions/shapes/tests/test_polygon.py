@@ -78,9 +78,11 @@ class TestPolygonPixelRegion(BaseTestPixelRegion):
                                                include_boundary_distortions=False)
         assert isinstance(polysphsky, PolygonSphericalSkyRegion)
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_spherical_sky(wcs,
-                                          include_boundary_distortions=True)
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True,
+                                               discretize_kwargs={'n_points': 10})
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert len(sphskypoly.vertices) == 10 * len(self.reg.vertices)
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
@@ -204,9 +206,11 @@ class TestPolygonSkyRegion(BaseTestSkyRegion):
                                                include_boundary_distortions=False)
         assert isinstance(polysphsky, PolygonSphericalSkyRegion)
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_spherical_sky(wcs,
-                                          include_boundary_distortions=True)
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True,
+                                               discretize_kwargs={'n_points': 10})
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert len(sphskypoly.vertices) == 10 * len(self.reg.vertices)
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:

@@ -190,18 +190,13 @@ class PolygonPixelRegion(PixelRegion):
                 raise ValueError(
                     "'wcs' must be set if 'include_boundary_distortions'=True"
                 )
-            # Requires planar to spherical projection (using WCS) and discretization
-            # Will require implementing discretization in pixel space
-            # to get correct handling of distortions.
-            raise NotImplementedError
 
-            # ### Potential solution:
-            # # Leverage polygon class to_spherical_sky() functionality without
-            # # distortions, as the distortions were already computed in creating
-            # # that polygon approximation
-            # return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
-            #     wcs=wcs, include_boundary_distortions=False
-            # )
+            # Discretize boundary, then leverage polygon class to_spherical_sky()
+            # functionality without distortions, as the distortions were
+            # already computed in creating that polygon approximation
+            return self.discretize_boundary(**discretize_kwargs).to_spherical_sky(
+                wcs=wcs, include_boundary_distortions=False
+            )
 
         return self.to_sky(wcs).to_spherical_sky()
 
@@ -516,18 +511,13 @@ class PolygonSkyRegion(SkyRegion):
                 raise ValueError(
                     "'wcs' must be set if 'include_boundary_distortions'=True"
                 )
-            # Requires planar to spherical projection (using WCS) and discretization
-            # Will require implementing discretization in pixel space
-            # to get correct handling of distortions.
-            raise NotImplementedError
 
-            # ### Potential solution:
-            # # Leverage polygon class to_spherical_sky() functionality without
-            # # distortions, as the distortions were already computed in creating
-            # # that polygon approximation
-            # return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
-            #     wcs=wcs, include_boundary_distortions=False
-            # )
+            # Discretize boundary, then leverage polygon class to_spherical_sky()
+            # functionality without distortions, as the distortions were
+            # already computed in creating that polygon approximation
+            return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
+                wcs=wcs, include_boundary_distortions=False
+            )
 
         # TODO: ensure vertices are in CW order,
         # as implicitly a planar -> spherical polygon will not be the
