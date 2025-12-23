@@ -126,7 +126,7 @@ class PolygonPixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object.
+            Planar PolygonPixelRegion object, with vertices in anti-clockwise order.
         """
         t = np.linspace(0, 1, num=n_points, endpoint=False)
 
@@ -485,7 +485,7 @@ class PolygonSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object.
+            Planar PolygonSkyRegion object, with vertices in anti-clockwise order.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion

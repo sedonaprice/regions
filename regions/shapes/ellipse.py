@@ -125,7 +125,7 @@ class EllipsePixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object, with vertices in clockwise order.
+            Planar PolygonPixelRegion object, with vertices in anti-clockwise order.
         """
         # Avoid circular imports:
         from .polygon import PolygonPixelRegion
@@ -454,7 +454,7 @@ class EllipseSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object, with vertices in clockwise order.
+            Planar PolygonSkyRegion object, with vertices in anti-clockwise order.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion

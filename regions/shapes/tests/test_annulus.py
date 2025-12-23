@@ -11,7 +11,8 @@ from astropy.wcs import WCS
 from numpy.testing import assert_allclose
 
 from regions.core import PixCoord, RegionMeta, RegionVisual
-from regions.core.compound import CompoundPixelRegion, CompoundSkyRegion
+from regions.core.compound import (CompoundPixelRegion, CompoundSkyRegion,
+                                   CompoundSphericalSkyRegion)
 from regions.shapes.annulus import (CircleAnnulusPixelRegion,
                                     CircleAnnulusSkyRegion,
                                     CircleAnnulusSphericalSkyRegion,
@@ -22,7 +23,8 @@ from regions.shapes.annulus import (CircleAnnulusPixelRegion,
                                     RectangleAnnulusSkyRegion,
                                     RectangleAnnulusSphericalSkyRegion)
 from regions.shapes.circle import CircleSphericalSkyRegion
-from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion, PolygonSkyRegion,
+                                    PolygonSphericalSkyRegion)
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
                                               BaseTestSkyRegion,
                                               BaseTestSphericalSkyRegion)
@@ -92,9 +94,14 @@ class TestCircleAnnulusPixelRegion(BaseTestPixelRegion):
                                               include_boundary_distortions=False)
         assert isinstance(sphskyann, CircleAnnulusSphericalSkyRegion)
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_spherical_sky(wcs,
-                                          include_boundary_distortions=True)
+        polysphskyann = self.reg.to_spherical_sky(
+            wcs,
+            include_boundary_distortions=True,
+            discretize_kwargs={'n_points': 10}
+        )
+        assert isinstance(polysphskyann, CompoundSphericalSkyRegion)
+        assert isinstance(polysphskyann.region1, PolygonSphericalSkyRegion)
+        assert len(polysphskyann.region1.vertices) == 10
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
@@ -165,9 +172,14 @@ class TestCircleAnnulusSkyRegion(BaseTestSkyRegion):
                                               include_boundary_distortions=False)
         assert isinstance(sphskyann, CircleAnnulusSphericalSkyRegion)
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_spherical_sky(wcs,
-                                          include_boundary_distortions=True)
+        polysphskyann = self.reg.to_spherical_sky(
+            wcs,
+            include_boundary_distortions=True,
+            discretize_kwargs={'n_points': 10}
+        )
+        assert isinstance(polysphskyann, CompoundSphericalSkyRegion)
+        assert isinstance(polysphskyann.region1, PolygonSphericalSkyRegion)
+        assert len(polysphskyann.region1.vertices) == 10
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
@@ -644,6 +656,26 @@ class TestRectangleAnnulusPixelRegion(BaseTestPixelRegion):
         skyannulus = self.reg.to_sky(wcs=self.wcs)
         assert isinstance(skyannulus, RectangleAnnulusSkyRegion)
 
+    def test_to_spherical_sky(self, wcs):
+        sphskyann = self.reg.to_spherical_sky(wcs,
+                                              include_boundary_distortions=False)
+        assert isinstance(sphskyann, RectangleAnnulusSphericalSkyRegion)
+
+        polysphskyann = self.reg.to_spherical_sky(
+            wcs,
+            include_boundary_distortions=True,
+            discretize_kwargs={'n_points': 10}
+        )
+        assert isinstance(polysphskyann, CompoundSphericalSkyRegion)
+        assert isinstance(polysphskyann.region1, PolygonSphericalSkyRegion)
+        assert len(polysphskyann.region1.vertices) == 40
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
     def test_rotate(self):
         reg = self.reg.rotate(PixCoord(2, 3), 90 * u.deg)
         assert_allclose(reg.center.xy, (1, 4))
@@ -708,6 +740,26 @@ class TestRectangleAnnulusSkyRegion(BaseTestSkyRegion):
     def test_transformation(self):
         pixannulus = self.reg.to_pixel(wcs=self.wcs)
         assert isinstance(pixannulus, RectangleAnnulusPixelRegion)
+
+    def test_to_spherical_sky(self, wcs):
+        sphskyann = self.reg.to_spherical_sky(wcs,
+                                              include_boundary_distortions=False)
+        assert isinstance(sphskyann, RectangleAnnulusSphericalSkyRegion)
+
+        polysphskyann = self.reg.to_spherical_sky(
+            wcs,
+            include_boundary_distortions=True,
+            discretize_kwargs={'n_points': 10}
+        )
+        assert isinstance(polysphskyann, CompoundSphericalSkyRegion)
+        assert isinstance(polysphskyann.region1, PolygonSphericalSkyRegion)
+        assert len(polysphskyann.region1.vertices) == 40
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
 
     def test_eq(self):
         reg = self.reg.copy()
