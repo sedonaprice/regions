@@ -13,7 +13,8 @@ from numpy.testing import assert_allclose, assert_equal
 from regions._utils.optional_deps import HAS_MATPLOTLIB
 from regions.core import PixCoord, RegionMeta, RegionVisual
 from regions.shapes.circle import CircleSphericalSkyRegion
-from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion, PolygonSkyRegion,
+                                    PolygonSphericalSkyRegion)
 from regions.shapes.rectangle import (RectanglePixelRegion, RectangleSkyRegion,
                                       RectangleSphericalSkyRegion)
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
@@ -97,6 +98,23 @@ class TestRectanglePixelRegion(BaseTestPixelRegion):
         reg_new.visual['color'] = 'green'
         assert reg_new.meta['text'] != self.reg.meta['text']
         assert reg_new.visual['color'] != self.reg.visual['color']
+
+    def test_sph_sky_transformation(self, wcs):
+        polysphsky = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=False)
+        assert isinstance(polysphsky, RectangleSphericalSkyRegion)
+
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True,
+                                               discretize_kwargs={'n_points': 10})
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert len(sphskypoly.vertices) == 40
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
 
     @pytest.mark.skipif(not HAS_MATPLOTLIB, reason='matplotlib is required')
     def test_as_artist(self):
@@ -388,6 +406,23 @@ class TestRectangleSkyRegion(BaseTestSkyRegion):
         reg2.height = self.reg.height * 0.75
         reg2disc = reg2.discretize_boundary(wcs, n_points=10)
         assert regskydiscr.contains(reg2disc.vertices, wcs).all()
+
+    def test_sph_sky_transformation(self, wcs):
+        polysphsky = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=False)
+        assert isinstance(polysphsky, RectangleSphericalSkyRegion)
+
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True,
+                                               discretize_kwargs={'n_points': 10})
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert len(sphskypoly.vertices) == 40
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
 
 
 class TestRectangleSphericalSkyRegion(BaseTestSphericalSkyRegion):
