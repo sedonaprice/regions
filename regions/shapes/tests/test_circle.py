@@ -95,7 +95,6 @@ class TestCirclePixelRegion(BaseTestPixelRegion):
 
     def test_discretize(self):
         regpixdiscr = self.reg.discretize_boundary(n_points=10)
-        # Only 4 points, including endpoints: compound region with 3 segments
         assert isinstance(regpixdiscr, PolygonPixelRegion)
         assert len(regpixdiscr.vertices) == 10
 
@@ -180,7 +179,6 @@ class TestCircleSkyRegion(BaseTestSkyRegion):
 
     def test_discretize(self, wcs):
         regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
-        # Only 4 points, including endpoints: compound region with 3 segments
         assert isinstance(regskydiscr, PolygonSkyRegion)
         assert len(regskydiscr.vertices) == 10
 

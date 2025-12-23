@@ -151,6 +151,15 @@ class TestPolygonPixelRegion(BaseTestPixelRegion):
         reg.vertices = PixCoord([1, 3, 1], [1, 1, 6])
         assert reg != self.reg
 
+    def test_discretize(self):
+        regpixdiscr = self.reg.discretize_boundary(n_points=10)
+        assert isinstance(regpixdiscr, PolygonPixelRegion)
+        assert len(regpixdiscr.vertices) == 10 * len(self.reg.vertices)
+
+        # Validate ordering of vertices:
+        pixcoord = PixCoord(*zip(*(self.inside), strict=True))
+        assert regpixdiscr.contains(pixcoord).all()
+
 
 class TestPolygonSkyRegion(BaseTestSkyRegion):
     meta = RegionMeta({'text': 'test'})
@@ -216,6 +225,16 @@ class TestPolygonSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.vertices = SkyCoord([3, 4, 3], [3, 4, 6], unit='deg')
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
+        assert isinstance(regskydiscr, PolygonSkyRegion)
+        assert len(regskydiscr.vertices) == 10 * len(self.reg.vertices)
+
+        # Validate ordering of vertices:
+        skycoord = SkyCoord(3.25 * u.deg, 3.75 * u.deg)
+        # 3.25,3.75 should be inside the triangle...
+        assert regskydiscr.contains(skycoord, wcs)
 
 
 class TestRegularPolygonPixelRegion(BaseTestPixelRegion):

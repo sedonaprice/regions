@@ -114,6 +114,52 @@ class PolygonPixelRegion(PixelRegion):
         else:
             return np.logical_not(in_poly)
 
+    def discretize_boundary(self, n_points=100):
+        """
+        Discretize the boundary into a PolygonPixelRegion.
+
+        Parameters
+        ----------
+        n_points : int, optional
+            Number of points along the each edge's boundary.
+
+        Returns
+        -------
+        poly_pix_region: `~regions.PolygonPixelRegion`
+            Planar PolygonPixelRegion object.
+        """
+        t = np.linspace(0, 1, num=n_points, endpoint=False)
+
+        all_edge_bound_verts = None
+        for i in range(len(self.vertices)):
+            # Endpoints of one edge: vertices[i-1], vertices[i]
+
+            xs = self.vertices[i - 1].x + t * (
+                self.vertices[i].x - self.vertices[i - 1].x
+            )
+            ys = self.vertices[i - 1].y + t * (
+                self.vertices[i].y - self.vertices[i - 1].y
+            )
+            bound_verts = PixCoord(xs, ys)
+
+            if all_edge_bound_verts is None:
+                all_edge_bound_verts = bound_verts
+            else:
+                all_edge_bound_verts = PixCoord(
+                    np.concatenate(
+                        [all_edge_bound_verts.x, bound_verts.x]
+                    ),
+                    np.concatenate(
+                        [all_edge_bound_verts.y, bound_verts.y]
+                    ),
+                )
+
+        return PolygonPixelRegion(
+            all_edge_bound_verts,
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
     def to_sky(self, wcs):
         vertices_sky = wcs.pixel_to_world(self.vertices.x, self.vertices.y)
         return PolygonSkyRegion(vertices=vertices_sky, meta=self.meta.copy(),
@@ -413,6 +459,35 @@ class PolygonSkyRegion(SkyRegion):
         self.vertices = vertices
         self.meta = meta or RegionMeta()
         self.visual = visual or RegionVisual()
+
+    def discretize_boundary(self, wcs, n_points=100):
+        """
+        Discretize the boundary into a PolygonSkyRegion.
+
+        As SkyRegions are planar, this requires a WCS instance
+        to map to a specified plane projection.
+
+        Parameters
+        ----------
+        wcs : `~astropy.wcs.WCS`
+            The world coordinate system transformation to use to convert
+            between sky and pixel coordinates.
+
+        n_points : int, optional
+            Number of points along the each edge's boundary.
+
+        Returns
+        -------
+        poly_sky_region: `~regions.PolygonSkyRegion`
+            Planar PolygonSkyRegion object.
+        """
+        # Transform to a PixelRegion, discretize, and then
+        # convert back to a SkyRegion
+
+        pixreg = self.to_pixel(wcs)
+        disc_pixreg = pixreg.discretize_boundary(n_points=n_points)
+
+        return disc_pixreg.to_sky(wcs)
 
     def to_pixel(self, wcs):
         x, y = wcs.world_to_pixel(self.vertices)

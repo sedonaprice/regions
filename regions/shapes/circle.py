@@ -93,7 +93,7 @@ class CirclePixelRegion(PixelRegion):
         Parameters
         ----------
         n_points : int, optional
-            Number of points along the line's boundary.
+            Number of points along the region's boundary.
 
         Returns
         -------
@@ -278,7 +278,7 @@ class CircleSkyRegion(SkyRegion):
             between sky and pixel coordinates.
 
         n_points : int, optional
-            Number of points along the line's boundary.
+            Number of points along the region's boundary.
 
         Returns
         -------
