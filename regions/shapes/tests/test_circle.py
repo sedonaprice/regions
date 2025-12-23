@@ -14,7 +14,8 @@ from regions._utils.optional_deps import HAS_MATPLOTLIB
 from regions.core import PixCoord, RegionMeta, RegionVisual
 from regions.shapes.circle import (CirclePixelRegion, CircleSkyRegion,
                                    CircleSphericalSkyRegion)
-from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion, PolygonSkyRegion,
+                                    PolygonSphericalSkyRegion)
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
                                               BaseTestSkyRegion,
                                               BaseTestSphericalSkyRegion)
@@ -67,9 +68,9 @@ class TestCirclePixelRegion(BaseTestPixelRegion):
                                                  include_boundary_distortions=False)
         assert isinstance(sphskycircle, CircleSphericalSkyRegion)
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_spherical_sky(wcs,
-                                          include_boundary_distortions=True)
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True)
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
@@ -143,13 +144,14 @@ class TestCircleSkyRegion(BaseTestSkyRegion):
                                  skycircle2.center.data.lat)
         assert_quantity_allclose(skycircle2.radius, skycircle.radius)
 
-        sphskycircle = self.reg.to_spherical_sky(wcs,
-                                                 include_boundary_distortions=False)
+        sphskycircle = skycircle.to_spherical_sky(wcs,
+                                                  include_boundary_distortions=False)
         assert isinstance(sphskycircle, CircleSphericalSkyRegion)
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_spherical_sky(wcs,
-                                          include_boundary_distortions=True)
+        sphskypoly = skycircle.to_spherical_sky(wcs,
+                                                include_boundary_distortions=True)
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert sphskypoly.contains(skycircle.center)
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
