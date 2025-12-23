@@ -78,6 +78,40 @@ class LinePixelRegion(PixelRegion):
         else:
             return np.logical_not(in_reg)
 
+    def discretize_boundary(self, n_points=100):
+        """
+        Discretize the boundary into a CompoundPixelRegion, containing
+        multiple individual LinePixelRegion instances as the line
+        segments.
+
+        Parameters
+        ----------
+        n_points : int, optional
+            Number of points along the line's boundary.
+
+        Returns
+        -------
+        line: `~regions.CompoundPixelRegion`
+            Planar CompoundPixelRegion object,
+            consisting of the union of multiple LinePixelRegion segments.
+        """
+        # Parametric equation to oversample line:
+        t = np.linspace(0, 1, num=n_points, endpoint=True)
+        xs = self.start.x + t * (self.end.x - self.start.x)
+        ys = self.start.y + t * (self.end.y - self.start.y)
+
+        # Create a CompoundPixelRegion out of these segments:
+        line = None
+        for i in range(n_points - 1):
+            lseg = LinePixelRegion(
+                PixCoord(xs[i], ys[i]), PixCoord(xs[i + 1], ys[i + 1]),
+                meta=self.meta.copy(),
+                visual=self.visual.copy(),
+            )
+            line = lseg if line is None else line | lseg
+
+        return line
+
     def to_sky(self, wcs):
         start = wcs.pixel_to_world(self.start.x, self.start.y)
         end = wcs.pixel_to_world(self.end.x, self.end.y)
@@ -193,6 +227,38 @@ class LineSkyRegion(SkyRegion):
     def contains(self, skycoord, wcs):  # pylint: disable=unused-argument
         # lines never contain anything
         return not self.meta.get('include', True)
+
+    def discretize_boundary(self, wcs, n_points=100):
+        """
+        Discretize the boundary into a CompoundSkyRegion, containing
+        multiple individual LineSkyRegion instances as the line
+        segments.
+
+        As LineSkyRegion is planar, this requires a WCS instance
+        to map to a specified plane projection.
+
+        Parameters
+        ----------
+        wcs : `~astropy.wcs.WCS`
+            The world coordinate system transformation to use to convert
+            between sky and pixel coordinates.
+
+        n_points : int, optional
+            Number of points along the line's boundary.
+
+        Returns
+        -------
+        line: `~regions.CompoundSkyRegion`
+            Planar CompoundSkyRegion object,
+            consisting of the union of multiple LineSkyRegion segments.
+        """
+        # Transform to LinePixelRegion, discretize, and then
+        # convert back to a SkyRegion
+
+        pixline = self.to_pixel(wcs)
+        disc_pixline = pixline.discretize_boundary(n_points=n_points)
+
+        return disc_pixline.to_sky(wcs)
 
     def to_pixel(self, wcs):
         start_x, start_y = wcs.world_to_pixel(self.start)

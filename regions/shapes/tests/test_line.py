@@ -11,7 +11,8 @@ from astropy.wcs import WCS
 from numpy.testing import assert_allclose
 
 from regions._utils.optional_deps import HAS_MATPLOTLIB
-from regions.core import PixCoord, RegionMeta, RegionVisual
+from regions.core import (CompoundPixelRegion, CompoundSkyRegion, PixCoord,
+                          RegionMeta, RegionVisual)
 from regions.shapes.line import LinePixelRegion, LineSkyRegion
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
                                               BaseTestSkyRegion)
@@ -78,6 +79,14 @@ class TestLinePixelRegion(BaseTestPixelRegion):
         reg.start = PixCoord(1, 2)
         assert reg != self.reg
 
+    def test_discretize(self):
+        linepixdiscr = self.reg.discretize_boundary(n_points=4)
+        # Only 4 points, including endpoints: compound region with 3 segments
+        assert isinstance(linepixdiscr, CompoundPixelRegion)
+        assert isinstance(linepixdiscr.region2, LinePixelRegion)
+        assert isinstance(linepixdiscr.region1.region1, LinePixelRegion)
+        assert isinstance(linepixdiscr.region1.region2, LinePixelRegion)
+
 
 class TestLineSkyRegion(BaseTestSkyRegion):
     meta = RegionMeta({'text': 'test'})
@@ -130,3 +139,11 @@ class TestLineSkyRegion(BaseTestSkyRegion):
         assert reg != self.reg
         reg.start = SkyCoord(3 * u.deg, 4 * u.deg, frame='icrs')
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        lineskydiscr = self.reg.discretize_boundary(wcs, n_points=4)
+        # Only 4 points, including endpoints: compound region with 3 segments
+        assert isinstance(lineskydiscr, CompoundSkyRegion)
+        assert isinstance(lineskydiscr.region2, LineSkyRegion)
+        assert isinstance(lineskydiscr.region1.region1, LineSkyRegion)
+        assert isinstance(lineskydiscr.region1.region2, LineSkyRegion)
