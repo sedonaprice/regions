@@ -95,7 +95,7 @@ class LinePixelRegion(PixelRegion):
             Planar CompoundPixelRegion object,
             consisting of the union of multiple LinePixelRegion segments.
         """
-        # Parametric equation to oversample line:
+        # Parametric equation to sample line:
         t = np.linspace(0, 1, num=n_points, endpoint=True)
         xs = self.start.x + t * (self.end.x - self.start.x)
         ys = self.start.y + t * (self.end.y - self.start.y)

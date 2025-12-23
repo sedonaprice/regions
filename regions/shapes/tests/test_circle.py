@@ -93,6 +93,15 @@ class TestCirclePixelRegion(BaseTestPixelRegion):
         reg.radius = 3
         assert reg != self.reg
 
+    def test_discretize(self):
+        regpixdiscr = self.reg.discretize_boundary(n_points=10)
+        # Only 4 points, including endpoints: compound region with 3 segments
+        assert isinstance(regpixdiscr, PolygonPixelRegion)
+        assert len(regpixdiscr.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert regpixdiscr.contains(self.reg.center)
+
     def test_zero_size(self):
         with pytest.raises(ValueError):
             CirclePixelRegion(PixCoord(50, 50), radius=0)
@@ -168,6 +177,15 @@ class TestCircleSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.radius = 3 * u.arcsec
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
+        # Only 4 points, including endpoints: compound region with 3 segments
+        assert isinstance(regskydiscr, PolygonSkyRegion)
+        assert len(regskydiscr.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert regskydiscr.contains(self.reg.center, wcs)
 
     def test_zero_size(self):
         with pytest.raises(ValueError):
