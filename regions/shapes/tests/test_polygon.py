@@ -73,7 +73,8 @@ class TestPolygonPixelRegion(BaseTestPixelRegion):
         assert reg_new.meta['text'] != self.reg.meta['text']
         assert reg_new.visual['color'] != self.reg.visual['color']
 
-    def test_to_spherical_sky(self, wcs):
+    def test_to_spherical_sky(self):
+        wcs = make_simple_wcs(SkyCoord(2 * u.deg, 3 * u.deg), 0.1 * u.deg, 20)
         polysphsky = self.reg.to_spherical_sky(wcs,
                                                include_boundary_distortions=False)
         assert isinstance(polysphsky, PolygonSphericalSkyRegion)
@@ -83,6 +84,7 @@ class TestPolygonPixelRegion(BaseTestPixelRegion):
                                                discretize_kwargs={'n_points': 10})
         assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
         assert len(sphskypoly.vertices) == 10 * len(self.reg.vertices)
+        assert sphskypoly.contains(wcs.pixel_to_world(2, 2))
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
@@ -211,6 +213,7 @@ class TestPolygonSkyRegion(BaseTestSkyRegion):
                                                discretize_kwargs={'n_points': 10})
         assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
         assert len(sphskypoly.vertices) == 10 * len(self.reg.vertices)
+        assert sphskypoly.contains(SkyCoord(3.5, 3.8, unit='deg'))
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:

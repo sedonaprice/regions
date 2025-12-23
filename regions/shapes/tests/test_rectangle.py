@@ -109,6 +109,7 @@ class TestRectanglePixelRegion(BaseTestPixelRegion):
                                                discretize_kwargs={'n_points': 10})
         assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
         assert len(sphskypoly.vertices) == 40
+        assert sphskypoly.contains(wcs.pixel_to_world(self.reg.center.x, self.reg.center.y))
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
@@ -417,6 +418,7 @@ class TestRectangleSkyRegion(BaseTestSkyRegion):
                                                discretize_kwargs={'n_points': 10})
         assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
         assert len(sphskypoly.vertices) == 40
+        assert sphskypoly.contains(self.reg.center)
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:

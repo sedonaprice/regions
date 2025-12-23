@@ -71,6 +71,7 @@ class TestCirclePixelRegion(BaseTestPixelRegion):
         sphskypoly = self.reg.to_spherical_sky(wcs,
                                                include_boundary_distortions=True)
         assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert sphskypoly.contains(wcs.pixel_to_world(self.reg.center.x, self.reg.center.y))
 
     def test_to_spherical_sky_no_wcs(self):
         with pytest.raises(ValueError) as excinfo:
