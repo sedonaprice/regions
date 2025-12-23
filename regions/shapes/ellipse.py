@@ -108,6 +108,45 @@ class EllipsePixelRegion(PixelRegion):
         else:
             return np.logical_not(in_ell)
 
+    def discretize_boundary(self, n_points=100):
+        """
+        Discretize the boundary into a PolygonPixelRegion.
+
+        Parameters
+        ----------
+        n_points : int, optional
+            Number of points along the line's boundary.
+
+        Returns
+        -------
+        poly_pix_region: `~regions.PolygonPixelRegion`
+            Planar PolygonPixelRegion object.
+        """
+        # Avoid circular imports:
+        from .polygon import PolygonPixelRegion
+
+        cos_angle = np.cos(self.angle)
+        sin_angle = np.sin(self.angle)
+        theta = np.linspace(0, 1, num=n_points, endpoint=False) * 360 * u.deg
+        cos_theta = np.cos(theta.to(u.radian))
+        sin_theta = np.sin(theta.to(u.radian))
+        xs = (
+            self.center.x
+            + 0.5 * self.width * cos_theta * cos_angle
+            - 0.5 * self.height * sin_theta * sin_angle
+        )
+        ys = (
+            self.center.y
+            + 0.5 * self.width * cos_theta * sin_angle
+            + 0.5 * self.height * sin_theta * cos_angle
+        )
+
+        return PolygonPixelRegion(
+            PixCoord(xs, ys),
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
     def to_sky(self, wcs):
         center = wcs.pixel_to_world(self.center.x, self.center.y)
         _, pixscale, north_angle = pixel_scale_angle_at_skycoord(center, wcs)
@@ -367,6 +406,35 @@ class EllipseSkyRegion(SkyRegion):
         self.angle = angle
         self.meta = meta or RegionMeta()
         self.visual = visual or RegionVisual()
+
+    def discretize_boundary(self, wcs, n_points=100):
+        """
+        Discretize the boundary into a PolygonSkyRegion.
+
+        As SkyRegions are planar, this requires a WCS instance
+        to map to a specified plane projection.
+
+        Parameters
+        ----------
+        wcs : `~astropy.wcs.WCS`
+            The world coordinate system transformation to use to convert
+            between sky and pixel coordinates.
+
+        n_points : int, optional
+            Number of points along the line's boundary.
+
+        Returns
+        -------
+        poly_sky_region: `~regions.PolygonSkyRegion`
+            Planar PolygonSkyRegion object.
+        """
+        # Transform to a PixelRegion, discretize, and then
+        # convert back to a SkyRegion
+
+        pixreg = self.to_pixel(wcs)
+        disc_pixreg = pixreg.discretize_boundary(n_points=n_points)
+
+        return disc_pixreg.to_sky(wcs)
 
     def to_pixel(self, wcs):
         center, pixscale, north_angle = pixel_scale_angle_at_skycoord(

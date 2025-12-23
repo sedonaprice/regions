@@ -13,6 +13,7 @@ from numpy.testing import assert_allclose, assert_equal
 from regions._utils.optional_deps import HAS_MATPLOTLIB
 from regions.core import PixCoord, RegionMeta, RegionVisual
 from regions.shapes.ellipse import EllipsePixelRegion, EllipseSkyRegion
+from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
                                               BaseTestSkyRegion)
 from regions.tests.helpers import make_simple_wcs
@@ -83,6 +84,22 @@ class TestEllipsePixelRegion(BaseTestPixelRegion):
         assert reg == self.reg
         reg.width = 3
         assert reg != self.reg
+
+    def test_discretize(self):
+        regpixdiscr = self.reg.discretize_boundary(n_points=10)
+        # Only 4 points, including endpoints: compound region with 3 segments
+        assert isinstance(regpixdiscr, PolygonPixelRegion)
+        assert len(regpixdiscr.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert regpixdiscr.contains(self.reg.center)
+
+        # Test smaller width/height all contained:
+        reg2 = self.reg.copy()
+        reg2.width = self.reg.width * 0.75
+        reg2.height = self.reg.height * 0.75
+        reg2disc = reg2.discretize_boundary(n_points=10)
+        assert regpixdiscr.contains(reg2disc.vertices).all()
 
     def test_region_bbox(self):
         a = 7
@@ -328,3 +345,19 @@ class TestEllipseSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.width = 3 * u.deg
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
+        # Only 4 points, including endpoints: compound region with 3 segments
+        assert isinstance(regskydiscr, PolygonSkyRegion)
+        assert len(regskydiscr.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert regskydiscr.contains(self.reg.center, wcs)
+
+        # Test smaller width/height all contained:
+        reg2 = self.reg.copy()
+        reg2.width = self.reg.width * 0.75
+        reg2.height = self.reg.height * 0.75
+        reg2disc = reg2.discretize_boundary(wcs, n_points=10)
+        assert regskydiscr.contains(reg2disc.vertices, wcs).all()
