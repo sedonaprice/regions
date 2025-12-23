@@ -20,6 +20,7 @@ from regions.shapes.annulus import (CircleAnnulusPixelRegion,
                                     RectangleAnnulusPixelRegion,
                                     RectangleAnnulusSkyRegion)
 from regions.shapes.circle import CircleSphericalSkyRegion
+from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
                                               BaseTestSkyRegion,
                                               BaseTestSphericalSkyRegion)
@@ -109,6 +110,15 @@ class TestCircleAnnulusPixelRegion(BaseTestPixelRegion):
         reg.inner_radius = 3
         assert reg != self.reg
 
+    def test_discretize(self):
+        regpixdiscr = self.reg.discretize_boundary(n_points=10)
+        assert isinstance(regpixdiscr, CompoundPixelRegion)
+        assert isinstance(regpixdiscr.region1, PolygonPixelRegion)
+        assert len(regpixdiscr.region1.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert not regpixdiscr.contains(self.reg.center)
+
 
 class TestCircleAnnulusSkyRegion(BaseTestSkyRegion):
     meta = RegionMeta({'text': 'test'})
@@ -168,6 +178,15 @@ class TestCircleAnnulusSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.inner_radius = 10 * u.arcsec
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
+        assert isinstance(regskydiscr, CompoundSkyRegion)
+        assert isinstance(regskydiscr.region1, PolygonSkyRegion)
+        assert len(regskydiscr.region1.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert not regskydiscr.contains(self.reg.center, wcs)
 
 
 class TestCircleAnnulusSphericalSkyRegion(BaseTestSphericalSkyRegion):
@@ -371,6 +390,15 @@ class TestEllipseAnnulusPixelRegion(BaseTestPixelRegion):
         reg.outer_height = 10
         assert reg != self.reg
 
+    def test_discretize(self):
+        regpixdiscr = self.reg.discretize_boundary(n_points=10)
+        assert isinstance(regpixdiscr, CompoundPixelRegion)
+        assert isinstance(regpixdiscr.region1, PolygonPixelRegion)
+        assert len(regpixdiscr.region1.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert not regpixdiscr.contains(self.reg.center)
+
 
 class TestEllipseAnnulusSkyRegion(BaseTestSkyRegion):
     meta = RegionMeta({'text': 'test'})
@@ -421,6 +449,15 @@ class TestEllipseAnnulusSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.outer_height = 85 * u.arcsec
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
+        assert isinstance(regskydiscr, CompoundSkyRegion)
+        assert isinstance(regskydiscr.region1, PolygonSkyRegion)
+        assert len(regskydiscr.region1.vertices) == 10
+
+        # Validate ordering of vertices:
+        assert not regskydiscr.contains(self.reg.center, wcs)
 
 
 class TestRectangleAnnulusPixelRegion(BaseTestPixelRegion):
@@ -495,6 +532,15 @@ class TestRectangleAnnulusPixelRegion(BaseTestPixelRegion):
         reg.outer_height = 10
         assert reg != self.reg
 
+    def test_discretize(self):
+        regpixdiscr = self.reg.discretize_boundary(n_points=10)
+        assert isinstance(regpixdiscr, CompoundPixelRegion)
+        assert isinstance(regpixdiscr.region1, PolygonPixelRegion)
+        assert len(regpixdiscr.region1.vertices) == 40
+
+        # Validate ordering of vertices:
+        assert not regpixdiscr.contains(self.reg.center)
+
 
 class TestRectangleAnnulusSkyRegion(BaseTestSkyRegion):
     meta = RegionMeta({'text': 'test'})
@@ -545,3 +591,12 @@ class TestRectangleAnnulusSkyRegion(BaseTestSkyRegion):
         assert reg == self.reg
         reg.outer_height = 85 * u.arcsec
         assert reg != self.reg
+
+    def test_discretize(self, wcs):
+        regskydiscr = self.reg.discretize_boundary(wcs, n_points=10)
+        assert isinstance(regskydiscr, CompoundSkyRegion)
+        assert isinstance(regskydiscr.region1, PolygonSkyRegion)
+        assert len(regskydiscr.region1.vertices) == 40
+
+        # Validate ordering of vertices:
+        assert not regskydiscr.contains(self.reg.center, wcs)

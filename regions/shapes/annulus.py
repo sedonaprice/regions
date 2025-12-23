@@ -188,6 +188,29 @@ class CircleAnnulusPixelRegion(AnnulusPixelRegion):
         return self._component_class(self.center, self.outer_radius,
                                      self.meta, self.visual)
 
+    def discretize_boundary(self, n_points=100):
+        """
+        Discretize the boundary into a CompoundPixelRegion consisting of
+        inner and outer PolygonPixelRegion instances.
+
+        Parameters
+        ----------
+        n_points : int, optional
+            Number of points along the region's boundary.
+
+        Returns
+        -------
+        poly_pix_region: `~regions.CompoundPixelRegion`
+            Planar CompoundPixelRegion object.
+        """
+        return CompoundPixelRegion(
+            self._inner_region.discretize_boundary(n_points=n_points),
+            self._outer_region.discretize_boundary(n_points=n_points),
+            operator=operator.xor,
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
     def to_sky(self, wcs):
         center = wcs.pixel_to_world(self.center.x, self.center.y)
         _, pixscale, _ = pixel_scale_angle_at_skycoord(center, wcs)
@@ -260,6 +283,31 @@ class CircleAnnulusSkyRegion(SkyRegion):
 
         if inner_radius >= outer_radius:
             raise ValueError('outer_radius must be greater than inner_radius')
+
+    def discretize_boundary(self, wcs, n_points=100):
+        """
+        Discretize the boundary into a CompoundSkyRegion consisting of
+        inner and outer PolygonSkyRegion instances.
+
+        As SkyRegions are planar, this requires a WCS instance
+        to map to a specified plane projection.
+
+        Parameters
+        ----------
+        wcs : `~astropy.wcs.WCS`
+            The world coordinate system transformation to use to convert
+            between sky and pixel coordinates.
+
+        n_points : int, optional
+            Number of points along the region's boundary.
+
+        Returns
+        -------
+        poly_sky_region: `~regions.CompoundSkyRegion`
+            Planar CompoundSkyRegion object.
+        """
+        # Leverage pixel discretization and round trip back to sky at the end:
+        return self.to_pixel(wcs).discretize_boundary(n_points=n_points).to_sky(wcs)
 
     def to_pixel(self, wcs):
         center, pixscale, _ = pixel_scale_angle_at_skycoord(self.center, wcs)
@@ -510,6 +558,29 @@ class AsymmetricAnnulusPixelRegion(AnnulusPixelRegion):
                                      self.outer_height, self.angle,
                                      self.meta, self.visual)
 
+    def discretize_boundary(self, n_points=100):
+        """
+        Discretize the boundary into a CompoundPixelRegion consisting of
+        inner and outer PolygonPixelRegion instances.
+
+        Parameters
+        ----------
+        n_points : int, optional
+            Number of points along the region's boundary.
+
+        Returns
+        -------
+        poly_pix_region: `~regions.CompoundPixelRegion`
+            Planar CompoundPixelRegion object.
+        """
+        return CompoundPixelRegion(
+            self._inner_region.discretize_boundary(n_points=n_points),
+            self._outer_region.discretize_boundary(n_points=n_points),
+            operator=operator.xor,
+            meta=self.meta.copy(),
+            visual=self.visual.copy()
+        )
+
     def to_sky_args(self, wcs):
         center = wcs.pixel_to_world(self.center.x, self.center.y)
         _, pixscale, north_angle = pixel_scale_angle_at_skycoord(center, wcs)
@@ -587,6 +658,31 @@ class AsymmetricAnnulusSkyRegion(SkyRegion):
             raise ValueError('outer_width must be greater than inner_width')
         if inner_height >= outer_height:
             raise ValueError('outer_height must be greater than inner_height')
+
+    def discretize_boundary(self, wcs, n_points=100):
+        """
+        Discretize the boundary into a CompoundSkyRegion consisting of
+        inner and outer PolygonSkyRegion instances.
+
+        As SkyRegions are planar, this requires a WCS instance
+        to map to a specified plane projection.
+
+        Parameters
+        ----------
+        wcs : `~astropy.wcs.WCS`
+            The world coordinate system transformation to use to convert
+            between sky and pixel coordinates.
+
+        n_points : int, optional
+            Number of points along the region's boundary.
+
+        Returns
+        -------
+        poly_sky_region: `~regions.CompoundSkyRegion`
+            Planar CompoundSkyRegion object.
+        """
+        # Leverage pixel discretization and round trip back to sky at the end:
+        return self.to_pixel(wcs).discretize_boundary(n_points=n_points).to_sky(wcs)
 
     def to_pixel_args(self, wcs):
         center, pixscale, north_angle = pixel_scale_angle_at_skycoord(
@@ -831,6 +927,10 @@ class RectangleAnnulusPixelRegion(AsymmetricAnnulusPixelRegion):
         super().__init__(center, inner_width, outer_width, inner_height,
                          outer_height, angle, meta, visual)
 
+    def discretize_boundary(self, n_points=10):
+        # Change default n_points for rectangles:
+        return super().discretize_boundary(n_points=n_points)
+
     def to_sky(self, wcs):
         return RectangleAnnulusSkyRegion(*self.to_sky_args(wcs),
                                          meta=self.meta.copy(),
@@ -893,6 +993,10 @@ class RectangleAnnulusSkyRegion(AsymmetricAnnulusSkyRegion):
                  outer_height, angle=0 * u.deg, meta=None, visual=None):
         super().__init__(center, inner_width, outer_width, inner_height,
                          outer_height, angle, meta, visual)
+
+    def discretize_boundary(self, wcs, n_points=10):
+        # Change default n_points for rectangles:
+        return super().discretize_boundary(wcs, n_points=n_points)
 
     def to_pixel(self, wcs):
         return RectangleAnnulusPixelRegion(*self.to_pixel_args(wcs),
