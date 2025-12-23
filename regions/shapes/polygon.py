@@ -126,7 +126,7 @@ class PolygonPixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object, with vertices in anti-clockwise order.
+            Planar PolygonPixelRegion object.
         """
         t = np.linspace(0, 1, num=n_points, endpoint=False)
 
@@ -485,7 +485,7 @@ class PolygonSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object, with vertices in anti-clockwise order.
+            Planar PolygonSkyRegion object.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion
@@ -515,9 +515,10 @@ class PolygonSkyRegion(SkyRegion):
             # Discretize boundary, then leverage polygon class to_spherical_sky()
             # functionality without distortions, as the distortions were
             # already computed in creating that polygon approximation
+            # Ensure returned region is in same frame as original planar sky region
             return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
                 wcs=wcs, include_boundary_distortions=False
-            )
+            ).transform_to(self.vertices[0].frame)
 
         # TODO: ensure vertices are in CW order,
         # as implicitly a planar -> spherical polygon will not be the

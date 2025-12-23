@@ -98,7 +98,7 @@ class CirclePixelRegion(PixelRegion):
         Returns
         -------
         poly_pix_region: `~regions.PolygonPixelRegion`
-            Planar PolygonPixelRegion object, with vertices in anti-clockwise order.
+            Planar PolygonPixelRegion object, with vertices in clockwise order.
         """
         # Avoid circular imports:
         from .polygon import PolygonPixelRegion
@@ -280,7 +280,7 @@ class CircleSkyRegion(SkyRegion):
         Returns
         -------
         poly_sky_region: `~regions.PolygonSkyRegion`
-            Planar PolygonSkyRegion object, with vertices in anti-clockwise order.
+            Planar PolygonSkyRegion object, with vertices in clockwise order.
         """
         # Transform to a PixelRegion, discretize, and then
         # convert back to a SkyRegion
@@ -310,9 +310,10 @@ class CircleSkyRegion(SkyRegion):
             # Discretize boundary, then leverage polygon class to_spherical_sky()
             # functionality without distortions, as the distortions were
             # already computed in creating that polygon approximation
+            # Ensure returned region is in same frame as original planar sky region
             return self.to_pixel(wcs).discretize_boundary(**discretize_kwargs).to_spherical_sky(
                 wcs=wcs, include_boundary_distortions=False
-            )
+            ).transform_to(self.center.frame)
 
         return CircleSphericalSkyRegion(
             self.center.copy(), self.radius.copy(),
