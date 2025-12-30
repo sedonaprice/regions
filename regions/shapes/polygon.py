@@ -2,8 +2,6 @@
 """
 This module defines polygon regions in both pixel and sky coordinates.
 """
-import operator
-
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
@@ -15,13 +13,13 @@ from regions._utils.optional_deps import HAS_SPHERICAL_GEOMETRY
 from regions._utils.spherical_helpers import (
     cross_product_skycoord2skycoord, cross_product_sum_skycoord2skycoord,
     discretize_all_edge_boundaries, do_optimized_polygon_contains,
-    do_sph_polygon_contains, get_edge_raw_lonlat_bounds_circ_edges)
+    do_sph_polygon_contains, get_edge_raw_lonlat_bounds_circ_edges,
+    is_centroid_is_contained_in_polygon, spherical_polygon_contains)
 from regions.core.attributes import (OneDPixCoord, OneDSkyCoord,
                                      PositiveScalar, RegionMetaDescr,
                                      RegionVisualDescr, ScalarAngle,
                                      ScalarPixCoord)
 from regions.core.bounding_box import RegionBoundingBox
-from regions.core.compound import CompoundSphericalSkyRegion
 from regions.core.core import PixelRegion, SkyRegion, SphericalSkyRegion
 from regions.core.mask import RegionMask
 from regions.core.metadata import RegionMeta, RegionVisual
@@ -503,23 +501,6 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
         return gcs
 
     @property
-    def _compound_region(self):
-        # Need N great circles to define boundaries for an N-sided polygon.
-        # verts are in CW order: Cross product to get bounding great circle centers
-        # Compute GCs and stack into a compound set:
-        compreg = None
-        gcs = self._edge_circs
-        for gc in gcs:
-            if compreg is None:
-                compreg = gc
-            else:
-                compreg = CompoundSphericalSkyRegion(
-                    compreg, gc, operator.and_, self.meta, self.visual,
-                )
-
-        return compreg
-
-    @property
     def _sph_geom_poly(self):
         if HAS_SPHERICAL_GEOMETRY:
             from spherical_geometry.polygon import SphericalPolygon
@@ -555,7 +536,11 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
         # Minimum distance
         centroid_mindist = self.centroid_mindist
 
-        if not self.contains(centroid_mindist):
+        # if not self.contains(centroid_mindist):
+        if not is_centroid_is_contained_in_polygon(
+            self.vertices,
+            centroid_mindist
+        ):
             return self.centroid_avg
 
         return centroid_mindist
@@ -646,7 +631,11 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
             )
 
         # Fallback if spherical_geometry is not installed:
-        return self._compound_region.contains(coord)
+        return spherical_polygon_contains(
+            coord,
+            self.vertices,
+            self.centroid
+        )
 
     def transform_to(self, frame, merge_attributes=True):
         frame = self._validate_frame(frame)
