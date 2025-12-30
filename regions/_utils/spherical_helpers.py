@@ -58,23 +58,199 @@ def cross_product_sum_skycoord2skycoord(coos):
     """
     # verts are in CW order:
     verts_cart = coos.frame.represent_as('cartesian')
-    crosssum = None
 
-    for i in range(len(verts_cart)):
-        if crosssum is None:
-            crosssum = verts_cart[i - 1].cross(verts_cart[i])
-        else:
-            crosssum += verts_cart[i - 1].cross(verts_cart[i])
+    # Faster than loop:
+    crosssum = np.append(
+        np.array([verts_cart[-1].cross(verts_cart[0]).xyz.value]).T,
+        verts_cart[:-1].cross(verts_cart[1:]).xyz.value,
+        axis=1
+    ).sum(axis=1)
 
     # Normalize sum of cross products to get cartesian representation of
     # centroid === minimum distance to other points location
-    c_cart = crosssum / crosssum.norm()
-    _, lat, lon = cartesian_to_spherical(c_cart.x, c_cart.y, c_cart.z)
+    c_cart = crosssum / np.sqrt(np.sum(crosssum**2))
+    _, lat, lon = cartesian_to_spherical(c_cart[0], c_cart[1], c_cart[2])
 
     # Ensure internal data representation format is consistent
     # with input coordinate convention:
     unit = coos[0].represent_as('spherical').lon.unit
     return SkyCoord(lon.to(unit), lat.to(unit), frame=coos.frame)
+
+# ------------------------------------------------------------------
+# vvvvvvv
+# Handling non-convex spherical polygons
+
+
+def _do_arc_segments_intersect(a, b, c, d):
+    # Return an array (or scalar if a & b are scalars)
+    # of booleans indicating if the arcs
+    # defined by a-b and c-d intersect.
+    # c and d are assumed to be single points.
+    # a and b can be scalars or arrays.
+
+    # Following
+    # https://web.archive.org/web/20160505193152/https://www.mathworks.com/matlabcentral/newsreader/view_thread/276271
+    # Definitions:
+    # p = cross(a,b); % p is along the normal to the plane of arc a-to-b
+    # q = cross(c,d); % Similarly for q and arc c-to-d
+    # t = cross(p,q); % t is along the line of intersection of the planes
+    # s1 = dot(cross(p,a),t);
+    # s2 = dot(cross(b,p),t);
+    # s3 = dot(cross(q,c),t);
+    # s4 = dot(cross(d,q),t);
+
+    cart_a = a.frame.represent_as('cartesian')
+    cart_b = b.frame.represent_as('cartesian')
+    cart_c = c.frame.represent_as('cartesian')
+    cart_d = d.frame.represent_as('cartesian')
+
+    # Check of length zero arc for either -> no intersection:
+    if np.all(
+        np.isclose(cart_a.x, cart_b.x)
+        & np.isclose(cart_a.y, cart_b.y)
+        & np.isclose(cart_a.z, cart_b.z)
+    ) | np.all(
+        np.isclose(cart_c.x, cart_d.x)
+        & np.isclose(cart_c.y, cart_d.y)
+        & np.isclose(cart_c.z, cart_d.z)
+    ):
+        if a.isscalar:
+            return False
+        else:
+            return np.zeros(len(a), dtype=bool)
+
+    cross_ab = cart_a.cross(cart_b)
+    cross_cd = cart_c.cross(cart_d)
+
+    cart_t = cross_ab.cross(cross_cd)
+
+    s_vals = [
+        np.atleast_1d(cross_ab.cross(cart_a).dot(cart_t)),
+        np.atleast_1d(cart_b.cross(cross_ab).dot(cart_t)),
+        np.atleast_1d(cross_cd.cross(cart_c).dot(cart_t)),
+        np.atleast_1d(cart_d.cross(cross_cd).dot(cart_t))
+    ]
+    # If all same sign, abs value of sum of signs should be 4
+    all_same_sign = (np.abs(np.sum(np.sign(s_vals).T, axis=1)) == 4)
+
+    # Scalar:
+    if a.isscalar:
+        return all_same_sign[0]
+
+    # Array:
+    return all_same_sign
+
+
+def _is_even_num_intersections(coord, verts, point):
+    # Polygon contains following even-odd rule:
+    # https://en.wikipedia.org/wiki/Even%E2%80%93odd_rule
+
+    # Determine if number of intersections between the arcs
+    # defined by the point and coords and the polygon segments
+    # is even or odd.
+
+    intersections = [
+        np.atleast_1d(
+            _do_arc_segments_intersect(
+                coord,
+                point,
+                verts[i - 1],
+                verts[i]
+            )
+        )
+        for i in range(len(verts))
+    ]
+
+    # Numpy will sum booleans as True = 1, False = 0,
+    # so no need to pre-convert:
+    num_intersections = np.sum(intersections, axis=0)
+
+    if coord.isscalar:
+        return num_intersections[0] % 2 == 0
+
+    return num_intersections % 2 == 0
+
+
+def is_centroid_is_contained_in_polygon(verts, centroid):
+    """
+    Check if a spherical polygon region contains the centroid.
+
+    Parameters
+    ----------
+    verts : `~astropy.coordinates.SkyCoord`
+        The vertices of the spherical polygon.
+
+    centroid : `~astropy.coordinates.SkyCoord`
+        The centroid of the polygon.
+
+    Returns
+    -------
+    contains : boolean
+        Whether the centroid is contained in the polygon or not.
+    """
+    # Sanity check:
+    # Using centroid and and a point close to the anti-centroid,
+    # the number of intersections
+    # along centroid-to-anti-centroid should be ODD.
+    # If even, the centroid isn't actually contained, and the
+    # opposite even/odd rule should be applied.
+
+    cart_anti_centroid = - centroid.directional_offset_by(
+        0, 0.01 * u.deg
+    ).frame.represent_as('cartesian')
+
+    _, lat, lon = cartesian_to_spherical(
+        cart_anti_centroid.x,
+        cart_anti_centroid.y,
+        cart_anti_centroid.z
+    )
+
+    # Ensure internal data representation format is consistent
+    # with input coordinate convention:
+    unit = centroid.represent_as('spherical').lon.unit
+    anti_centroid = SkyCoord(lon.to(unit), lat.to(unit), frame=centroid.frame)
+
+    # Even number of intersections: BOTH outside.
+    return not _is_even_num_intersections(anti_centroid, verts, centroid)
+
+
+def spherical_polygon_contains(coord, verts, centroid):
+    """
+    Check if a spherical polygon region contains points.
+
+    Parameters
+    ----------
+    coord : `~astropy.coordinates.SkyCoord`
+        Coordinates of point(s) to check.
+
+    verts : `~astropy.coordinates.SkyCoord`
+        The vertices of the spherical polygon.
+
+    centroid : `~astropy.coordinates.SkyCoord`
+        The centroid of the polygon.
+
+    Returns
+    -------
+    contains : list-like or boolean
+        Boolean (scalar or list, corresponding to coords)
+        of whether or not each point is contained within the polygon.
+    """
+    # Note: polygon edges must be < 180 deg of length!
+
+    is_centroid_contained = is_centroid_is_contained_in_polygon(
+        verts,
+        centroid,
+    )
+    is_even_intersections = _is_even_num_intersections(coord, verts, centroid)
+
+    if not is_centroid_contained:
+        return np.logical_not(is_even_intersections)
+
+    return is_even_intersections
+
+# Handling non-convex spherical polygons
+# ^^^^^^^
+# ------------------------------------------------------------------
 
 
 def bounding_lonlat_poles_processing(region, lons_arr, lats_arr, inner_region=None):
