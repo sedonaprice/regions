@@ -15,7 +15,8 @@ from regions.core import PixCoord, RegionMeta, RegionVisual
 from regions.shapes.circle import CircleSphericalSkyRegion
 from regions.shapes.ellipse import (EllipsePixelRegion, EllipseSkyRegion,
                                     EllipseSphericalSkyRegion)
-from regions.shapes.polygon import PolygonPixelRegion, PolygonSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion, PolygonSkyRegion,
+                                    PolygonSphericalSkyRegion)
 from regions.shapes.tests.test_common import (BaseTestPixelRegion,
                                               BaseTestSkyRegion,
                                               BaseTestSphericalSkyRegion)
@@ -68,6 +69,22 @@ class TestEllipsePixelRegion(BaseTestPixelRegion):
         reg_new.visual['color'] = 'green'
         assert reg_new.meta['text'] != self.reg.meta['text']
         assert reg_new.visual['color'] != self.reg.visual['color']
+
+    def test_to_spherical_sky(self, wcs):
+        sphskycircle = self.reg.to_spherical_sky(wcs,
+                                                 include_boundary_distortions=False)
+        assert isinstance(sphskycircle, EllipseSphericalSkyRegion)
+
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True)
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert sphskypoly.contains(wcs.pixel_to_world(self.reg.center.x, self.reg.center.y))
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
 
     @pytest.mark.skipif(not HAS_MATPLOTLIB, reason='matplotlib is required')
     def test_as_artist(self):
@@ -326,6 +343,42 @@ class TestEllipseSkyRegion(BaseTestSkyRegion):
         assert_allclose(reg.angle.to_value('deg'), 5)
         assert reg.meta == self.meta
         assert reg.visual == self.visual
+
+    def test_transformation(self, wcs):
+        skycoord = SkyCoord(3 * u.deg, 4 * u.deg, frame='galactic')
+        skyellipse = EllipseSkyRegion(skycoord, 4 * u.arcsec,
+                                      2 * u.arcsec, angle=30 * u.deg)
+
+        pixellipse = skyellipse.to_pixel(wcs)
+
+        assert_allclose(pixellipse.center.x, -50.5)
+        assert_allclose(pixellipse.center.y, 299.5)
+        assert_allclose(pixellipse.height, 0.027777777777828305)
+        assert_allclose(pixellipse.width, 0.05555555555565661)
+
+        skyellipse2 = pixellipse.to_sky(wcs)
+
+        assert_quantity_allclose(skyellipse.center.data.lon,
+                                 skyellipse2.center.data.lon)
+        assert_quantity_allclose(skyellipse.center.data.lat,
+                                 skyellipse2.center.data.lat)
+        assert_quantity_allclose(skyellipse.width, skyellipse2.width)
+        assert_quantity_allclose(skyellipse.height, skyellipse2.height)
+
+        sphskyellipse = self.reg.to_spherical_sky(wcs,
+                                                  include_boundary_distortions=False)
+        assert isinstance(sphskyellipse, EllipseSphericalSkyRegion)
+
+        sphskypoly = self.reg.to_spherical_sky(wcs,
+                                               include_boundary_distortions=True)
+        assert isinstance(sphskypoly, PolygonSphericalSkyRegion)
+        assert sphskypoly.contains(self.reg.center)
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
 
     def test_dimension_center(self):
         center = SkyCoord([1, 2] * u.deg, [3, 4] * u.deg)

@@ -391,6 +391,26 @@ class TestEllipseAnnulusPixelRegion(BaseTestPixelRegion):
         skyannulus = self.reg.to_sky(wcs=self.wcs)
         assert isinstance(skyannulus, EllipseAnnulusSkyRegion)
 
+    def test_to_spherical_sky(self, wcs):
+        sphskyann = self.reg.to_spherical_sky(wcs,
+                                              include_boundary_distortions=False)
+        assert isinstance(sphskyann, EllipseAnnulusSphericalSkyRegion)
+
+        polysphskyann = self.reg.to_spherical_sky(
+            wcs,
+            include_boundary_distortions=True,
+            discretize_kwargs={'n_points': 100}
+        )
+        assert isinstance(polysphskyann, CompoundSphericalSkyRegion)
+        assert isinstance(polysphskyann.region1, PolygonSphericalSkyRegion)
+        assert len(polysphskyann.region1.vertices) == 100
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
+
     def test_rotate(self):
         reg = self.reg.rotate(PixCoord(2, 3), 90 * u.deg)
         assert_allclose(reg.center.xy, (1, 4))
@@ -455,6 +475,26 @@ class TestEllipseAnnulusSkyRegion(BaseTestSkyRegion):
     def test_transformation(self):
         pixannulus = self.reg.to_pixel(wcs=self.wcs)
         assert isinstance(pixannulus, EllipseAnnulusPixelRegion)
+
+    def test_to_spherical_sky(self, wcs):
+        sphskyann = self.reg.to_spherical_sky(wcs,
+                                              include_boundary_distortions=False)
+        assert isinstance(sphskyann, EllipseAnnulusSphericalSkyRegion)
+
+        polysphskyann = self.reg.to_spherical_sky(
+            wcs,
+            include_boundary_distortions=True,
+            discretize_kwargs={'n_points': 100}
+        )
+        assert isinstance(polysphskyann, CompoundSphericalSkyRegion)
+        assert isinstance(polysphskyann.region1, PolygonSphericalSkyRegion)
+        assert len(polysphskyann.region1.vertices) == 100
+
+    def test_to_spherical_sky_no_wcs(self):
+        with pytest.raises(ValueError) as excinfo:
+            _ = self.reg.to_spherical_sky(include_boundary_distortions=True)
+        estr = "'wcs' must be set if 'include_boundary_distortions'=True"
+        assert estr in str(excinfo.value)
 
     def test_eq(self):
         reg = self.reg.copy()
