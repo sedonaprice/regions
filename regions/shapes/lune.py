@@ -17,8 +17,10 @@ from regions.core.attributes import (RegionMetaDescr, RegionVisualDescr,
 from regions.core.compound import CompoundSphericalSkyRegion
 from regions.core.core import SphericalSkyRegion
 from regions.core.metadata import RegionMeta, RegionVisual
+from regions.core.pixcoord import PixCoord
 from regions.shapes.circle import CircleSphericalSkyRegion
-from regions.shapes.polygon import PolygonSphericalSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion,
+                                    PolygonSphericalSkyRegion)
 
 __all__ = ['LuneSphericalSkyRegion']
 
@@ -237,4 +239,11 @@ class LuneSphericalSkyRegion(SphericalSkyRegion):
                     "'wcs' must be set if 'include_boundary_distortions'=True"
                 )
             # Requires spherical to planar projection (from WCS) and discretization
-            raise NotImplementedError
+            disc_bound = self.discretize_boundary(**discretize_kwargs)
+
+            verts = wcs.world_to_pixel(disc_bound.vertices)
+
+            return PolygonPixelRegion(
+                PixCoord(*verts), meta=self.meta.copy(),
+                visual=self.visual.copy()
+            )

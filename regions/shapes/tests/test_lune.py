@@ -12,7 +12,8 @@ from numpy.testing import assert_allclose
 from regions.core import RegionMeta, RegionVisual
 from regions.shapes.circle import CircleSphericalSkyRegion
 from regions.shapes.lune import LuneSphericalSkyRegion
-from regions.shapes.polygon import PolygonSphericalSkyRegion
+from regions.shapes.polygon import (PolygonPixelRegion, PolygonSkyRegion,
+                                    PolygonSphericalSkyRegion)
 from regions.shapes.tests.test_common import BaseTestSphericalSkyRegion
 
 
@@ -53,21 +54,40 @@ class TestLuneSphericalSkyRegion(BaseTestSphericalSkyRegion):
         estr = 'Invalid parameter: `include_boundary_distortions=False`!'
         assert estr in str(excinfo.value)
 
-        with pytest.raises(ValueError) as excinfo:
-            _ = self.reg.to_sky(wcs)
-        estr = 'Invalid parameter: `include_boundary_distortions=False`!'
-        assert estr in str(excinfo.value)
+        polypix = self.reg.to_pixel(wcs,
+                                    include_boundary_distortions=True,
+                                    discretize_kwargs={'n_points': 4})
+        assert isinstance(polypix, PolygonPixelRegion)
+        assert len(polypix.vertices) == 8
 
-        # Test for not implemented with include_boundary_distortions=True
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_sky(wcs,
-                                include_boundary_distortions=True,
-                                discretize_kwargs={'n_points': 2})
+        assert_allclose(polypix.vertices.x,
+                        [-6047.096263, -8322.268224,
+                         7679.463723, 5478.341119,
+                         2952.903737, 5520.265414,
+                         7797.817216, -8238.505893])
+        assert_allclose(polypix.vertices.y,
+                        [1455.912621, 719.308061,
+                         -338.786552, -1174.476499,
+                         -1256.912621, -1347.24981,
+                         -560.164308, 562.867594])
 
-        with pytest.raises(NotImplementedError):
-            _ = self.reg.to_pixel(wcs,
+        polysky = self.reg.to_sky(wcs,
                                   include_boundary_distortions=True,
-                                  discretize_kwargs={'n_points': 2})
+                                  discretize_kwargs={'n_points': 4})
+        assert isinstance(polysky, PolygonSkyRegion)
+        assert len(polysky.vertices) == 8
+
+        # WCS is Galactic:
+        assert_allclose(polysky.vertices.l.deg,
+                        [122.931925, 168.435364,
+                         208.400726, 252.423178,
+                         302.931925, 251.584692,
+                         206.033656, 166.760118])
+        assert_allclose(polysky.vertices.b.deg,
+                        [27.128252, 12.396161,
+                         -8.765731, -25.47953,
+                         -27.128252, -28.934996,
+                         -13.193286, 9.267352])
 
     def test_frame_transformation(self):
         reg2 = self.reg.transform_to('galactic')
