@@ -14,7 +14,8 @@ from regions._geometry.pnpoly import points_in_polygon
 from regions._utils.optional_deps import HAS_SPHERICAL_GEOMETRY
 from regions._utils.spherical_helpers import (
     cross_product_skycoord2skycoord, cross_product_sum_skycoord2skycoord,
-    discretize_all_edge_boundaries, get_edge_raw_lonlat_bounds_circ_edges)
+    discretize_all_edge_boundaries, do_optimized_polygon_contains,
+    do_sph_polygon_contains, get_edge_raw_lonlat_bounds_circ_edges)
 from regions.core.attributes import (OneDPixCoord, OneDSkyCoord,
                                      PositiveScalar, RegionMetaDescr,
                                      RegionVisualDescr, ScalarAngle,
@@ -602,29 +603,23 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
 
         return lons_arr, lats_arr
 
-    def contains(self, coord, use_sph_geom=None):
+    def contains(self, coord, use_sph_geom_type=None):
         # TMP for performance testing:
-        if use_sph_geom is None:
-            use_sph_geom = HAS_SPHERICAL_GEOMETRY
-        # if HAS_SPHERICAL_GEOMETRY:
-        if use_sph_geom:
-            poly = self._sph_geom_poly
-            c_sph = coord.spherical
-            if coord.isscalar:
-                return poly.contains_lonlat(
-                    c_sph.lon,
-                    c_sph.lat,
-                    degrees=True
-                )
-            else:
-                lons = c_sph.lon
-                lats = c_sph.lat
-                # List comprehension loop over full set of coordinates
-                cont_list = [
-                    poly.contains_lonlat(lon, lat, degrees=True)
-                    for lon, lat in zip(lons, lats)
-                ]
-                return np.array(cont_list)
+        if (use_sph_geom_type is None) and HAS_SPHERICAL_GEOMETRY:
+            use_sph_geom_type = 'poly'
+        if use_sph_geom_type == 'poly':
+            return do_sph_polygon_contains(
+                coord, self
+            )
+
+        elif use_sph_geom_type == 'optimize':
+            # Do a SEPARATE function the opposite way,
+            # using array for the max of num vertices or num
+            # coord points.
+            return do_optimized_polygon_contains(
+                coord, self
+            )
+
         # Fallback if spherical_geometry is not installed:
         return self._compound_region.contains(coord)
 

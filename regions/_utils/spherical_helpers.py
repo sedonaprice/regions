@@ -10,6 +10,8 @@ from astropy.coordinates import (Latitude, Longitude, SkyCoord,
                                  UnitSphericalRepresentation,
                                  cartesian_to_spherical)
 
+from regions._utils.optional_deps import HAS_SPHERICAL_GEOMETRY
+
 __all__ = []
 
 
@@ -644,3 +646,132 @@ def discretize_all_edge_boundaries(vertices, circs, n_points):
             )
 
     return all_edge_bound_verts
+
+
+def do_sph_polygon_contains(
+    coord, poly
+):
+    """
+    Determine whether points are contained within a polygon or not,
+    using functionality in spherical_geometry.
+
+    Parameters
+    ----------
+    coord : `~astropy.coordinates.SkyCoord`
+        The points to check as a SkyCoord.
+
+    poly : `~regions.PolygonSphericalSkyRegion`
+        The spherical polygon region instance.
+    """
+    poly_sph = poly._sph_geom_poly
+
+    c_sph = coord.spherical
+    if coord.isscalar:
+        return poly_sph.contains_lonlat(
+            c_sph.lon.degree,
+            c_sph.lat.degree,
+            degrees=True
+        )
+    else:
+        lons = c_sph.lon.degree
+        lats = c_sph.lat.degree
+        # List comprehension loop over full set of coordinates
+        cont_list = [
+            poly_sph.contains_lonlat(lon, lat, degrees=True)
+            for lon, lat in zip(lons, lats)
+        ]
+        return np.array(cont_list)
+
+
+def do_optimized_polygon_contains(
+        coord, poly
+):
+    """
+    Determine whether points are contained within a polygon or not,
+    using functionality in spherical_geometry.
+
+    Parameters
+    ----------
+    coord : `~astropy.coordinates.SkyCoord`
+        The points to check as a SkyCoord.
+
+    poly : `~regions.PolygonSphericalSkyRegion`
+        The spherical polygon region instance.
+    """
+    if HAS_SPHERICAL_GEOMETRY:
+        from spherical_geometry import great_circle_arc
+    else:
+        raise ValueError(
+            'Cannot use `do_optimized_polygon_contains()` '
+            'unless `spherical_geometry` is installed!'
+        )
+
+    # Scalar point: just use built-in implementation:
+    if coord.isscalar:
+        return do_sph_polygon_contains(
+            coord, poly
+        )
+
+    nverts = len(poly.vertices)
+    ncoos = len(coord)
+    # c_sph = coord.spherical
+
+    if nverts > ncoos:
+        # Use the built-in implementation:
+        return do_sph_polygon_contains(
+            coord, poly
+        )
+
+    # ----------------------------------------------
+    # Otherwise, FLIP the implementation:
+    # Explicitly loop over the edges, and use coordinates as array:
+
+    # Relies on sph_geom polygon:
+    # Vertices are shoestringed, with the first and last points the same.
+    poly_sph = poly._sph_geom_poly
+    verts = poly_sph._polygons[0]._points
+    inside = poly_sph._polygons[0]._inside
+
+    # # Independent of sph_geom polygon creation:
+    # v_cart = poly.vertices.cartesian
+    # verts = np.array([
+    #     v_cart._x.value,
+    #     v_cart._y.value,
+    #     v_cart._z.value
+    # ]).T
+    # inside = poly.centroid_avg.cartesian.xyz.value
+    # # QUESTION: Will this lead to issues with centroid for edge cases?
+    # # Yes it could, it seems, so skip this method even though
+    # # faster for Nvert = 3 relative to the alternative above.
+
+    # Necessary for shoestrining in loop below:
+    # num_internal_verts = verts.shape[0]
+
+    # # spherical_geometry method:
+    # points = vector.lonlat_to_vector(
+    #     c_sph.lon.degree,
+    #     c_sph.lat.degree,
+    #     degrees=True
+    # )
+    # # Restructure to Nx3 array:
+    # points = np.asanyarray(points).T
+
+    # Use astropy.coordinate.SkyCoord methods instead:
+    c_cart = coord.cartesian
+    points = np.array([
+        c_cart._x.value,
+        c_cart._y.value,
+        c_cart._z.value
+    ]).T
+
+    insides_array = np.repeat([inside], ncoos, axis=0)
+
+    intersects_points = []
+    for i in range(nverts):
+        intersects = great_circle_arc.intersects(
+            verts[i], verts[i + 1], insides_array, points
+            # verts[i], verts[(i + 1) % num_internal_verts], insides_array, points
+        )
+        intersects_points.append(intersects)
+
+    return (np.sum(intersects_points, axis=0) % 2) == 0
