@@ -11,6 +11,7 @@ from astropy.stats import circmean
 
 from regions._geometry import polygonal_overlap_grid
 from regions._geometry.pnpoly import points_in_polygon
+from regions._utils.optional_deps import HAS_SPHERICAL_GEOMETRY
 from regions._utils.spherical_helpers import (
     cross_product_skycoord2skycoord, cross_product_sum_skycoord2skycoord,
     discretize_all_edge_boundaries, get_edge_raw_lonlat_bounds_circ_edges)
@@ -518,6 +519,27 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
         return compreg
 
     @property
+    def _sph_geom_poly(self):
+        if HAS_SPHERICAL_GEOMETRY:
+            from spherical_geometry.polygon import SphericalPolygon
+
+            # DON'T pass inside point, given possibility that the
+            # "mindist" centroid isn't actually contains (and
+            # thus cannot check that a priori).
+            # Use the auto-inside-finder in SphericalPolygon instead.
+            verts_s = self.vertices.spherical
+            poly = SphericalPolygon.from_lonlat(
+                verts_s.lon, verts_s.lat,
+                degrees=True
+            )
+            return poly
+
+        raise ValueError(
+            "'spherical_geometry' is not installed -- "
+            'this property is not defined!'
+        )
+
+    @property
     def centroid(self):
         """
         Region centroid.
@@ -580,7 +602,30 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
 
         return lons_arr, lats_arr
 
-    def contains(self, coord):
+    def contains(self, coord, use_sph_geom=None):
+        # TMP for performance testing:
+        if use_sph_geom is None:
+            use_sph_geom = HAS_SPHERICAL_GEOMETRY
+        # if HAS_SPHERICAL_GEOMETRY:
+        if use_sph_geom:
+            poly = self._sph_geom_poly
+            c_sph = coord.spherical
+            if coord.isscalar:
+                return poly.contains_lonlat(
+                    c_sph.lon,
+                    c_sph.lat,
+                    degrees=True
+                )
+            else:
+                lons = c_sph.lon
+                lats = c_sph.lat
+                # List comprehension loop over full set of coordinates
+                cont_list = [
+                    poly.contains_lonlat(lon, lat, degrees=True)
+                    for lon, lat in zip(lons, lats)
+                ]
+                return np.array(cont_list)
+        # Fallback if spherical_geometry is not installed:
         return self._compound_region.contains(coord)
 
     def transform_to(self, frame, merge_attributes=True):

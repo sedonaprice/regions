@@ -37,6 +37,7 @@ Documentation = 'https://astropy-regions.readthedocs.io/en/stable/'
 all = [
     'matplotlib >= 3.8',
     'shapely >= 2.0.0',
+    'spherical_geometry >= 1.3.3',
 ]
 test = [
     'pytest-astropy >= 0.11',
