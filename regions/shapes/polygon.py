@@ -608,6 +608,7 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
         if (use_sph_geom_type is None) and HAS_SPHERICAL_GEOMETRY:
             use_sph_geom_type = 'poly'
         if use_sph_geom_type == 'poly':
+            # By default, includes BC precut:
             return do_sph_polygon_contains(
                 coord, self
             )
@@ -617,7 +618,31 @@ class PolygonSphericalSkyRegion(SphericalSkyRegion):
             # using array for the max of num vertices or num
             # coord points.
             return do_optimized_polygon_contains(
-                coord, self
+                coord, self, gt_fallback=None, bounding_circle_precut=None
+            )
+
+        elif use_sph_geom_type == 'optimize_bounding_circle':
+            # Do a SEPARATE function the opposite way,
+            # using array for the max of num vertices or num
+            # coord points.
+            return do_optimized_polygon_contains(
+                coord, self, gt_fallback=None
+            )
+
+        elif use_sph_geom_type == 'optimize_fallback':
+            # Do a SEPARATE function the opposite way,
+            # using array for the max of num vertices or num
+            # coord points.
+            return do_optimized_polygon_contains(
+                coord, self, gt_fallback=125, bounding_circle_precut=None
+            )
+
+        elif use_sph_geom_type == 'optimize_fallback_bounding_circle':
+            # Do a SEPARATE function the opposite way,
+            # using array for the max of num vertices or num
+            # coord points.
+            return do_optimized_polygon_contains(
+                coord, self, gt_fallback=125,
             )
 
         # Fallback if spherical_geometry is not installed:
