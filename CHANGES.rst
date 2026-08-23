@@ -10,6 +10,9 @@ New Features
 Bug Fixes
 ---------
 
+- Fixed a doubled comma in the serialized CRTF output when ``range`` or
+  ``corr`` is the only metadata of a region. [#700]
+
 API Changes
 -----------
 
