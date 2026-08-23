@@ -11,7 +11,7 @@ from astropy.coordinates import Angle, SkyCoord
 from astropy.tests.helper import assert_quantity_allclose
 from astropy.utils.data import get_pkg_data_filename
 
-from regions.core import Regions
+from regions.core import RegionMeta, Regions
 from regions.io.crtf.core import CRTFRegionParserError
 from regions.io.crtf.read import _CRTFParser
 from regions.shapes.circle import CircleSkyRegion
@@ -122,6 +122,25 @@ def test_issue_312_regression():
     crtfstr = reg.serialize(format='crtf', coordsys='fk5', fmt='.6f',
                             radunit='deg')
     assert crtfstr.strip()[-1] != ','
+
+
+@pytest.mark.parametrize(('meta', 'expected'),
+                         [({'corr': ['XX']}, 'deg], corr=[XX]'),
+                          ({'range': ['1000MHz', '2000MHz']},
+                           'deg], range=[1000MHz, 2000MHz]')])
+def test_issue_322_regression(meta, expected):
+    """
+    Make sure there is no doubled comma when writing a CRTF string
+    where range or corr is the only metadata.
+    """
+    reg = EllipseSkyRegion(center=SkyCoord(279.486483 * u.deg,
+                                           -20.683327 * u.deg, frame='fk5'),
+                           width=0.009218 * u.deg, height=0.005954 * u.deg,
+                           angle=100.410911 * u.deg, meta=RegionMeta(meta))
+    crtfstr = reg.serialize(format='crtf', coordsys='fk5', fmt='.6f',
+                            radunit='deg')
+    assert ', ,' not in crtfstr
+    assert expected in crtfstr
 
 
 @pytest.mark.parametrize(('filename', 'outname', 'coordsys', 'fmt'),
