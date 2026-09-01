@@ -183,7 +183,6 @@ class _ShapeList(list):
             for key, val in shape.meta.items():
                 if key not in keylist:
                     meta_pairs.append(f'{key}={val}')
-            meta_str = ', '.join(meta_pairs)
 
             # The first item should be the coordinates, since CASA
             # cannot recognize a region without an inline coordinate
@@ -192,22 +191,23 @@ class _ShapeList(list):
             shape_coordsys = shape.coordsys
             if shape_coordsys.lower() != coordsys.lower():
                 coord = coordsys_mapping['CRTF'][coordsys.lower()]
-                if meta_str.strip():
-                    meta_str = f'coord={coord}, ' + meta_str
-                else:
-                    # if there is no metadata at all (above), the
-                    # trailing comma is incorrect
-                    meta_str = f'coord={coord}'
+                meta_pairs.insert(0, f'coord={coord}')
 
             if 'comment' in shape.meta:
-                meta_str += ', ' + shape.meta['comment']
+                meta_pairs.append(shape.meta['comment'])
 
             if 'range' in shape.meta:
                 shape.meta['range'] = [str(str(x).replace(' ', '')) for x in
                                        shape.meta['range']]
-                meta_str += f", range={shape.meta['range']}".replace("'", '')
+                meta_pairs.append(
+                    f"range={shape.meta['range']}".replace("'", ''))
             if 'corr' in shape.meta:
-                meta_str += f", corr={shape.meta['corr']}".replace("'", '')
+                meta_pairs.append(
+                    f"corr={shape.meta['corr']}".replace("'", ''))
+
+            # join only once so that an empty item cannot leave a
+            # doubled comma in the output (issue #322)
+            meta_str = ', '.join(meta_pairs)
 
             coord = []
             if coordsys not in ['image', 'physical']:
