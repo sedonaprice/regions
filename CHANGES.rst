@@ -13,7 +13,7 @@ Bug Fixes
 - Fixed a doubled comma in the serialized CRTF output when ``range`` or
   ``corr`` is the only metadata of a region. [#700]
 - Fixed an issue with frame standardization impacting creating
-  compound regions with RangeSphericalSkyRegion instances. [#704]
+  compound regions with ``RangeSphericalSkyRegion`` instances. [#704]
 
 API Changes
 -----------
