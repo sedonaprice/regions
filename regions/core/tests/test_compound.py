@@ -220,9 +220,12 @@ class TestCompoundSphericalSky:
 
     def test_contains_components(self):
         # Check test point positions relative to component regions
-        assert self.c2.contains(self.test_coord1) and not self.c1.contains(self.test_coord1)
-        assert not self.c2.contains(self.test_coord2) and self.c1.contains(self.test_coord2)
-        assert self.c1.contains(self.test_coord3) and self.c2.contains(self.test_coord3)
+        assert (self.c2.contains(self.test_coord1)
+                and not self.c1.contains(self.test_coord1))
+        assert (not self.c2.contains(self.test_coord2)
+                and self.c1.contains(self.test_coord2))
+        assert (self.c1.contains(self.test_coord3)
+                and self.c2.contains(self.test_coord3))
         assert (not self.c2.contains(self.test_coord4)
                 and not self.c1.contains(self.test_coord4))
 
