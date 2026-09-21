@@ -16,7 +16,7 @@ from regions.core import (CompoundPixelRegion, CompoundSkyRegion,
                           CompoundSphericalSkyRegion, PixCoord,
                           RegionBoundingBox)
 from regions.shapes import (CirclePixelRegion, CircleSkyRegion,
-                            CircleSphericalSkyRegion)
+                            CircleSphericalSkyRegion, RangeSphericalSkyRegion)
 from regions.tests.helpers import make_simple_wcs
 
 
@@ -287,3 +287,21 @@ class TestCompoundSphericalSky:
         bound_lonlat3 = union3.bounding_lonlat
         assert bound_lonlat3[0] is None
         assert isinstance(bound_lonlat3[1], Latitude)
+
+    def test_compound_range(self):
+        """
+        Regression test: confirm a compound region can be created
+        using RangeSphericalSkyRegion instances.
+        """
+        reg1 = RangeSphericalSkyRegion(
+            frame='icrs',
+            latitude_range=[0 * u.deg, 1 * u.deg],
+        )
+        reg2 = RangeSphericalSkyRegion(
+            frame='icrs',
+            latitude_range=[0.5 * u.deg, 1.5 * u.deg],
+        )
+        union = reg1 & reg2
+
+        assert isinstance(union, CompoundSphericalSkyRegion)
+        assert union.frame.name == 'icrs'

@@ -62,7 +62,7 @@ class TestRangeSphericalSkyRegion(BaseTestSphericalSkyRegion):
                                        frame=frame)
         reg2 = RangeSphericalSkyRegion(longitude_range=[0, 10] * u.deg,
                                        frame='icrs')
-        assert not reg1._frame.has_data
+        assert not reg1.frame.has_data
         assert reg1 == reg2
         assert reg2 == reg1
 

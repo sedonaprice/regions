@@ -5,7 +5,7 @@ Base class for all shape tests.
 
 import numpy as np
 import pytest
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import BaseCoordinateFrame, SkyCoord
 from numpy.testing import assert_allclose, assert_equal
 
 from regions._utils.optional_deps import HAS_MATPLOTLIB
@@ -103,3 +103,16 @@ class BaseTestSphericalSkyRegion(BaseTestRegion):
         actual = self.reg.contains(skycoord)
         assert_equal(actual[:len(self.inside)], True)
         assert_equal(actual[len(self.inside):], False)
+
+    def test_standardize_frame(self):
+        """
+        Regression test: confirm the standardized frame for
+        SphericalSkyRegion instances are an instance of
+        astropy.coordinates.BaseCoordinateFrame.
+        """
+        try:
+            frame = self.reg.frame
+        except AttributeError:
+            pytest.xfail()
+
+        assert isinstance(frame, BaseCoordinateFrame)
