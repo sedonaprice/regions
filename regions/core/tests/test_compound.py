@@ -16,7 +16,7 @@ from regions.core import (CompoundPixelRegion, CompoundSkyRegion,
                           CompoundSphericalSkyRegion, PixCoord,
                           RegionBoundingBox)
 from regions.shapes import (CirclePixelRegion, CircleSkyRegion,
-                            CircleSphericalSkyRegion)
+                            CircleSphericalSkyRegion, RangeSphericalSkyRegion)
 from regions.tests.helpers import make_simple_wcs
 
 
@@ -193,7 +193,12 @@ def test_compound_sky():
     assert isinstance(union_to_pixel, CompoundPixelRegion)
 
 
-def test_compound_spherical_sky(wcs):
+class TestCompoundSphericalSky:
+    """
+    Test compound spherical sky regions.
+    """
+
+    # Test regions and coordinates
     skycoord1 = SkyCoord(0 * u.deg, 0 * u.deg, frame='galactic')
     c1 = CircleSphericalSkyRegion(skycoord1, 1 * u.deg)
 
@@ -205,58 +210,101 @@ def test_compound_spherical_sky(wcs):
     test_coord3 = SkyCoord(0.7 * u.deg, 0.7 * u.deg, frame='galactic')
     test_coord4 = SkyCoord(2 * u.deg, 5 * u.deg, frame='galactic')
 
-    assert c2.contains(test_coord1) and not c1.contains(test_coord1)
-    assert not c2.contains(test_coord2) and c1.contains(test_coord2)
-    assert c1.contains(test_coord3) and c2.contains(test_coord3)
-    assert (not c2.contains(test_coord4)
-            and not c1.contains(test_coord4))
-
     coords = SkyCoord([test_coord1, test_coord2, test_coord3, test_coord4],
                       frame='galactic')
 
-    union = c1 | c2
-    assert (union.contains(coords) == [True, True, True, False]).all()
-
-    intersection = c1 & c2
-    assert ((intersection.contains(coords)
-             == [False, False, True, False]).all())
-
-    diff = c1 ^ c2
-    assert (diff.contains(coords) == [True, True, False, False]).all()
-
     c3 = CircleSphericalSkyRegion(test_coord4, 0.1 * u.deg)
-    union = c1 | c2 | c3
-    assert (union.contains(coords) == [True, True, True, True]).all()
-
-    intersection = c1 & c2 & c3
-    assert ((intersection.contains(coords)
-             == [False, False, False, False]).all())
-
-    diff = c1 ^ c2 ^ c3
-    assert (diff.contains(coords) == [True, True, False, True]).all()
-    assert 'Compound' in str(union)
-
-    union_to_sky = union.to_sky(wcs=wcs)
-    assert isinstance(union_to_sky, CompoundSkyRegion)
-
-    union_to_pixel = union.to_pixel(wcs)
-    assert isinstance(union_to_pixel, CompoundPixelRegion)
-
-    assert isinstance(union.bounding_circle, CircleSphericalSkyRegion)
-
-    bound_lonlat = union.bounding_lonlat
-    assert isinstance(bound_lonlat[0], Longitude)
-    assert isinstance(bound_lonlat[1], Latitude)
-
-    assert isinstance(union.transform_to('icrs'),
-                      CompoundSphericalSkyRegion)
-
-    assert isinstance(union.discretize_boundary(n_vertices=2),
-                      CompoundSphericalSkyRegion)
 
     skycoord4 = SkyCoord(1 * u.deg, 89 * u.deg, frame='galactic')
     c4 = CircleSphericalSkyRegion(skycoord4, 2.5 * u.deg)
-    union = c1 | c4
-    bound_lonlat = union.bounding_lonlat
-    assert bound_lonlat[0] is None
-    assert isinstance(bound_lonlat[1], Latitude)
+
+    def test_contains_components(self):
+        # Check test point positions relative to component regions
+        assert (self.c2.contains(self.test_coord1)
+                and not self.c1.contains(self.test_coord1))
+        assert (not self.c2.contains(self.test_coord2)
+                and self.c1.contains(self.test_coord2))
+        assert (self.c1.contains(self.test_coord3)
+                and self.c2.contains(self.test_coord3))
+        assert (not self.c2.contains(self.test_coord4)
+                and not self.c1.contains(self.test_coord4))
+
+    def test_union(self):
+        union = self.c1 | self.c2
+        assert (union.contains(self.coords) == [True, True, True, False]).all()
+
+        union2 = self.c1 | self.c2 | self.c3
+        assert (union2.contains(self.coords) == [True, True, True, True]).all()
+
+        assert 'Compound' in str(union)
+
+    def test_intersection(self):
+        intersection = self.c1 & self.c2
+        assert ((intersection.contains(self.coords)
+                == [False, False, True, False]).all())
+
+        intersection2 = self.c1 & self.c2 & self.c3
+        assert ((intersection2.contains(self.coords)
+                == [False, False, False, False]).all())
+
+    def test_symdiff(self):
+        diff = self.c1 ^ self.c2
+        assert (diff.contains(self.coords) == [True, True, False, False]).all()
+
+        diff2 = self.c1 ^ self.c2 ^ self.c3
+        assert (diff2.contains(self.coords) == [True, True, False, True]).all()
+
+    def test_transformation(self, wcs):
+        union = self.c1 | self.c2
+
+        union_to_sky = union.to_sky(wcs=wcs)
+        assert isinstance(union_to_sky, CompoundSkyRegion)
+
+        union_to_pixel = union.to_pixel(wcs)
+        assert isinstance(union_to_pixel, CompoundPixelRegion)
+
+    def test_frame_transformation(self):
+        union = self.c1 | self.c2
+        assert isinstance(union.transform_to('icrs'),
+                          CompoundSphericalSkyRegion)
+
+    def test_discretize_boundary(self):
+        union = self.c1 | self.c2
+
+        assert isinstance(union.discretize_boundary(n_vertices=2),
+                          CompoundSphericalSkyRegion)
+
+    def test_bounding_circle(self):
+        union = self.c1 | self.c2
+        assert isinstance(union.bounding_circle, CircleSphericalSkyRegion)
+
+    def test_bounding_lonlat(self):
+        union = self.c1 | self.c2
+
+        bound_lonlat = union.bounding_lonlat
+        assert isinstance(bound_lonlat[0], Longitude)
+        assert isinstance(bound_lonlat[1], Latitude)
+
+        # Test no longitude bounds on union
+        union3 = self.c1 | self.c4
+        bound_lonlat3 = union3.bounding_lonlat
+        assert bound_lonlat3[0] is None
+        assert isinstance(bound_lonlat3[1], Latitude)
+
+    def test_compound_range(self):
+        """
+        Regression test: confirm a compound region can be created
+        using RangeSphericalSkyRegion instances.
+        """
+        reg1 = RangeSphericalSkyRegion(
+            frame='icrs',
+            latitude_range=[0 * u.deg, 1 * u.deg],
+        )
+        reg2 = RangeSphericalSkyRegion(
+            frame='icrs',
+            latitude_range=[0.5 * u.deg, 1.5 * u.deg],
+        )
+        union = reg1 & reg2
+
+        assert isinstance(union, CompoundSphericalSkyRegion)
+        assert union.frame.name == 'icrs'
